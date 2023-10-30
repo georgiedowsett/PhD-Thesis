@@ -1,0 +1,608 @@
+---
+title: "Human_NucSeq_Plots"
+author: "Georgina Dowsett"
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, root.dir = '~/Dropbox/Thesis/Chapter3/')
+```
+
+
+# Plotting of snRNA-seq data from the human hypothalamus for Thesis Figures
+
+This R Markdown document provides the code required for plots of the snRNA-seq datset of human hypothalamus
+
+```{r message = FALSE}
+library(Seurat)
+library(ggplot2)
+library(tidyverse) 
+library(scCustomize)
+library(patchwork)
+library(RColorBrewer)
+library(gridExtra)
+library(viridis)
+library(viridisLite)
+library(scales)
+library(pheatmap)
+source('~/Dropbox/Data/ST_forhumanhypomap/Scripts/RNAseqSTUtils.R')
+
+```
+
+```{r echo = FALSE}
+sessionInfo()
+```
+
+## Load the data and set output folder 
+```{r, eval = FALSE}
+data<-readRDS('~/Dropbox/Data/ST_forhumanhypomap/data/NucSeq/human_hypo_combined.rds')
+markers<-read.delim('~/Dropbox/Data/ST_forhumanhypomap/data/markers_final.txt')
+num_to_name<-read.delim('~/Dropbox/Data/ST_forhumanhypomap/data/NucSeq/human_hypo_combined_annotation_overview.txt')
+Idents(data)<-data@meta.data$C6
+dim(data)
+results_folder<-'~/Dropbox/Thesis/Chapter3/Figs/'
+
+```
+
+
+
+## Overview of the NucSeq dataset. 
+
+First, we need to annotate the clusters according to general cell types, and add cluster names to the object 
+```{r, eval = FALSE} 
+c4<-data.frame(table(data$C4))
+c4 <- c4 %>%
+  mutate(Var1 = as.character(Var1), cell_type = ifelse(Var1 %in% c("C4-116", "C4-117", "C4-118", "C4-119", "C4-120", "C4-121", "C4-122", "C4-123", "C4-124", "C4-125", "C4-126", "C4-127", "C4-128"), "Astrocytes",
+                                                       ifelse(Var1 %in% c("C3-54"), "OPCs",
+                                                              ifelse(Var1 %in% c("C3-55", "C3-56", "C3-57", "C3-58", "C3-59"), "Oligos",
+                                                                     ifelse(grepl("^C4-(1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|62|63|64|65|66|67|68|69|70|71|72|73|74|75|76|77|78|79|80|81|82|83|84|85|86|87|88|89|90|91|92|93)$", Var1), "Neurons",
+                                                                            ifelse(Var1 == "C4-94", "Ependymal",
+                                                                                   ifelse(Var1 == "C4-95", "Tanycytes",
+                                                                                          ifelse(Var1 %in% c("C4-96", "C4-97"), "Ependymal",
+                                                                                                 ifelse(Var1 %in% c("C4-98", "C4-99"), "Endothelial",
+                                                                                                        ifelse(Var1 %in% c("C4-100", "C4-101", "C4-102"), "Mural",
+                                                                                                               ifelse(Var1 %in% c("C4-103", "C4-104"), "Ependymal",
+                                                                                                                      ifelse(Var1 %in% c("C4-105", "C4-106", "C4-107", "C4-108", "C4-109", "C4-110", "C4-111", "C4-112", "C4-113", "C4-114", "C4-115"), "Immune",
+                                                                                                                             "unknown"
+                                                                                                                      )
+                                                                                                               )
+                                                                                                        )
+                                                                                                 )
+                                                                                          )
+                                                                                   )
+                                                                            )
+                                                                     )
+                                                              )
+                                                       )
+  )
+  )
+c4$Var1 <- as.character(c4$Var1)
+c4$cell_type <- as.character(c4$cell_type)
+metadata_map <- setNames(c4$cell_type, c4$Var1)
+c4_var1 <- unlist(data[["C4"]])
+data[["cell_type"]] <- metadata_map[c4_var1]
+
+cluster_levels <- c("C1", "C2", "C3", "C4", "C5", "C6")
+for (level in cluster_levels) {
+  sub_num_to_name <- num_to_name[num_to_name$cluster %in% unique(data[[level]])[,level], ]
+  cluster_mapping <- setNames(sub_num_to_name$genes_conc, sub_num_to_name$cluster)
+  cluster_names <- cluster_mapping[match(data[[level]][,level], names(cluster_mapping))]
+  data <- AddMetaData(data, metadata = cluster_names, col.name = paste0(level, "_names"))
+}
+```
+
+## Fig 3-1
+```{r, eval = FALSE}
+DimPlot_scCustom(data, raster = F, group.by = 'cell_type', reduction = 'umap_scvi_hypo')
+print(FeaturePlot(data, c('SNAP25', 'AQP4', 'PLP1', 'PDGFRA', 'FYB1', 'VIM'), order = F, reduction = 'umap_scvi_hypo', raster = F, ncol = 3, cols = c('lightgrey', 'darkred'), pt.size =0.1) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank()))
+```
+
+## Fig 3-2
+We look at expression of transcription factors, expressed in different regions of the hypothalamus. 
+
+```{r, eval = FALSE}
+print(FeaturePlot(data, c('MEIS2', 'LHX6', 'FEZF1', 'TBX3', 'SIM1', 'FOXB1', 'LMX1A', 'PITX2'), order = T, reduction = 'umap_scvi_hypo', raster = F, ncol = 2, cols = c('lightgrey', 'darkblue'), pt.size =0.1) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank()))
+```
+
+## Fig 3-3
+We show umap plots coloured by dataset and by donor 
+
+```{r, eval = FALSE}
+DimPlot_scCustom(data, group.by = 'Dataset', reduction = 'umap_scvi_hypo', raster = F, colors_use = c('goldenrod3', 'darkgreen')) & 
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+DimPlot_scCustom(data, group.by = 'Donor_ID', reduction = 'umap_scvi_hypo', raster = F) & 
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+
+```
+
+NB Fig 3-4 is taken from the human HYPOMAP paper
+
+## Fig 3-5
+```{r, eval = FALSE}
+Idents(data)<-data@meta.data$C3
+arc<-WhichCells(data, idents = c('C3-22'))
+data$ARC <- ifelse(colnames(data) %in% arc, 'ARC', 'NO')
+cols = c('ARC' = 'purple', 'NO' = 'lightgrey')
+DimPlot(data, group.by = 'ARC', cols = cols, reduction = 'umap_scvi_hypo', raster = FALSE)
+
+arc<-subset(data, subset = C3 == 'C3-22')
+Idents(arc)<-arc@meta.data$C6
+arc_markers<-FindAllMarkers(arc, only.pos = TRUE)
+arc_markers$specificity_score <- ((arc_markers$pct.1 + 0.01) / (arc_markers$pct.2 + 0.01)) * arc_markers$avg_log2FC
+
+#First we want to add new names which are the same as C6_names, minus the first 16 characters
+names<-data.frame(table(arc$C6_names))
+names$new_names <- substring(names$Var1, 17)
+new_names<- c( "NE_Mid-1_3_TBX3_ESR1_CALCR" = "ESR1_CALCR",
+               "NE_Mid-1_3_TBX3_ESR1_CCBE1_COL22A1" = "ESR1_CCBE1_COL22A1",
+               "NE_Mid-1_3_TBX3_ESR1_CCBE1_IGF1" = "ESR1_CCBE1_IGF1",
+               "NE_Mid-1_3_TBX3_ESR1_COL22A1" = "ESR1_COL22A1",
+               "NE_Mid-1_3_TBX3_ESR1_PGR_CALCR" = "ESR1_PGR_CALCR",
+               "NE_Mid-1_3_TBX3_ESR1_PGR_LYPD6B" = "ESR1_PGR_LYPD6B",
+               "NE_Mid-1_3_TBX3_PDGFD_GABRE_ALDH1A1" = "PDGFD_GABRE_ALDH1A1", 
+               "NE_Mid-1_3_TBX3_PDGFD_GABRE_PGR" = "PDGFD_GABRE_PGR",
+               "NE_Mid-1_3_TBX3_PDGFD_GABRE_TWIST1" = "PDGFD_GABRE_TWIST1",
+               "NE_Mid-1_3_TBX3_PDGFD_PIK3C2G_HMCN1" = "PDGFD_PIK3C2G_HMCN1",
+               "NE_Mid-1_3_TBX3_PDGFD_PIK3C2G_WIF1" = "PDGFD_PIK3C2G_WIF1",
+               "NE_Mid-1_3_TBX3_POMC_ANKRD30A" = "POMC_ANKRD30A",
+               "NE_Mid-1_3_TBX3_POMC_CALCR" = "POMC_CALCR",
+               "NE_Mid-1_3_TBX3_POMC_LEPR" = "POMC_LEPR")
+arc$naming <- new_names[as.character(arc@meta.data$C6_names)]
+
+DimPlot(arc, group.by = 'naming', label = T, reduction = 'umap_scvi_hypo', raster = F, repel = T) & 
+  NoLegend() &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank()) &
+  xlim(7, 14) &
+  ylim(-7, 0)
+
+genes_of_interest <- c('TBX3', 'POMC', 'PDGFD', 'ESR1', 'LEPR', 'CALCR', 'ANKRD30A', 'PIK3C2G', 'WIF1', 'HMCN1', 'GABRE', 'TWIST1', 'ALDH1A1', 'PGR', 'LYPD6B', 'COL22A1', 'CCBE1', 'IGF1', 'SLC17A6', 'SLC32A1')
+
+arc_percents<-calc_percent_cluster(arc, genes_of_interest, 'C6_names')
+pheatmap::pheatmap(arc_percents[1:20], color = viridis(256), border_color = 'lightgrey', cluster_rows = F, cluster_cols = F, fontsize = 10)
+```
+
+## Fig 2-14
+```{r, eval = FALSE}
+DimPlot_scCustom(data, reduction = 'umap_scvi_hypo', raster = F, group.by = 'C1_names', label = T) & NoLegend()
+OL<-subset(data, subset = C1_names == c('Oligo_Mature', 'Oligo_Precursor'))
+pdf(paste0(results_folder, 'Oligo-C1-names.pdf'), width = 3, height = 6)
+DimPlot(OL, reduction = 'umap_scvi_hypo', raster = F, group.by = 'C1_names', label = T) & 
+  NoLegend() &
+  xlim(-10, -4) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+DimPlot_scCustom(OL, reduction = 'umap_scvi_hypo', raster = F, group.by = 'C2_names', label = T, repel = T) & 
+  NoLegend() &
+  xlim(-10, -4) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+DimPlot_scCustom(OL, reduction = 'umap_scvi_hypo', raster = F, group.by = 'C3_names', label = T, repel = T) & 
+  NoLegend() &
+  xlim(-10, -4) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+dev.off()
+FeaturePlot(OL, reduction = 'umap_scvi_hypo', raster = F, features = c('PDGFRA', 'CSPG4', 'BMP4', 'OLIG2', 'MBP', 'MOG'), ncol = 3) & 
+  xlim(-10, -4) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+```
+
+## Fig 3-16
+Calculating the number of cells per cluster and also the % donor & dataset as well as proportion donor & dataset
+```{r, eval = FALSE}
+print(table(OL$C1_names))
+print(table(OL$C2_names))
+dataset<-data.frame(table(OL$C2_names, OL$Dataset))
+dataset<-pivot_wider(dataset, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Dataset))
+dataset<-merge(dataset, x, by.y = 'Var1', by.x = 'Var2')
+donor<-data.frame(table(OL$C2_names, OL$Donor_ID))
+donor<-pivot_wider(donor, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Donor_ID))
+donor<-merge(donor, x, by.y = 'Var1', by.x = 'Var2')
+
+proportion_donor <- donor[, -ncol(donor)]
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+test<-pivot_longer(proportion_donor, c('Oligo_Mature_ACSBG1', 'Oligo_Mature_OPALIN', 'Oligo_Precursor_SEZ6L', 'Oligo_Precursor_GPR17'))
+a<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+proportion_dataset <- dataset[, -ncol(dataset)]
+for (col in colnames(proportion_dataset)[-1]) {
+proportion_dataset[[col]] <- proportion_dataset[[col]] / dataset$Freq
+}
+test<-pivot_longer(proportion_dataset, c('Oligo_Mature_ACSBG1', 'Oligo_Mature_OPALIN', 'Oligo_Precursor_SEZ6L', 'Oligo_Precursor_GPR17'))
+b<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+percent_dataset<-dataset[, -ncol(dataset)]
+col_sums<-colSums(percent_dataset[, -1])
+for (i in 2:ncol(percent_dataset)) {
+  percent_dataset[, i] <- (percent_dataset[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_dataset, c('Oligo_Mature_ACSBG1', 'Oligo_Mature_OPALIN', 'Oligo_Precursor_SEZ6L', 'Oligo_Precursor_GPR17'))
+d<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+percent_donor<-donor[, -ncol(donor)]
+col_sums<-colSums(percent_donor[, -1])
+for (i in 2:ncol(percent_donor)) {
+  percent_donor[, i] <- (percent_donor[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_donor, c('Oligo_Mature_ACSBG1', 'Oligo_Mature_OPALIN', 'Oligo_Precursor_SEZ6L', 'Oligo_Precursor_GPR17'))
+c<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+a + b + c + d
+```
+
+
+## Fig 3-17
+```{r, eval = FALSE}
+astros<-subset(data, subset = C1 == c('C1-9', 'C1-10'))
+DimPlot(astros, group.by = 'C3', reduction = 'umap_scvi_hypo', raster = F) +
+  xlim(-6,3) +
+  ylim(-6,3) +
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+
+DimPlot(astros, group.by = 'Donor_ID', reduction = 'umap_scvi_hypo', raster = F) +
+  xlim(-6,3) +
+  ylim(-6,3) +
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+
+Stacked_VlnPlot(astros, c('GFAP', 'AQP4', 'SLC1A2', 'SLC1A3', 'EPHA6', 'TSHZ2', 'ALDH1A1', 'GABBR2', 'CCDC85A', 'LRRTM4', 'LUCAT1', 'ITPRID1', 'LGR6', 'CPAMD8', 'HILPDA', 'FSTL5', 'SERPINA3', 'MT1H', 'ATRNL1', 'NRXN3', 'S100A1', 'CHI3L1'), group.by = 'C4')
+
+```
+
+## Fig 2-18
+```{r, eval = FALSE}
+dataset<-data.frame(table(astros$C2, astros$Dataset))
+dataset<-pivot_wider(dataset, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Dataset))
+dataset<-merge(dataset, x, by.y = 'Var1', by.x = 'Var2')
+donor<-data.frame(table(astros$C2, astros$Donor_ID))
+donor<-pivot_wider(donor, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Donor_ID))
+donor<-merge(donor, x, by.y = 'Var1', by.x = 'Var2')
+
+proportion_donor <- donor[, -ncol(donor)]
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+test<-pivot_longer(proportion_donor, c('C2-21', 'C2-22', 'C2-23', 'C2-24', 'C2-25'))
+a<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+proportion_dataset <- dataset[, -ncol(dataset)]
+for (col in colnames(proportion_dataset)[-1]) {
+proportion_dataset[[col]] <- proportion_dataset[[col]] / dataset$Freq
+}
+test<-pivot_longer(proportion_dataset, c('C2-21', 'C2-22', 'C2-23', 'C2-24', 'C2-25'))
+b<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+percent_dataset<-dataset[, -ncol(dataset)]
+col_sums<-colSums(percent_dataset[, -1])
+for (i in 2:ncol(percent_dataset)) {
+  percent_dataset[, i] <- (percent_dataset[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_dataset, c('C2-21', 'C2-22', 'C2-23', 'C2-24', 'C2-25'))
+d<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+percent_donor<-donor[, -ncol(donor)]
+col_sums<-colSums(percent_donor[, -1])
+for (i in 2:ncol(percent_donor)) {
+  percent_donor[, i] <- (percent_donor[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_donor, c('C2-21', 'C2-22', 'C2-23', 'C2-24', 'C2-25'))
+c<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+a + b + c + d
+
+dataset<-data.frame(table(astros$C3, astros$Dataset))
+dataset<-pivot_wider(dataset, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Dataset))
+dataset<-merge(dataset, x, by.y = 'Var1', by.x = 'Var2')
+donor<-data.frame(table(astros$C3, astros$Donor_ID))
+donor<-pivot_wider(donor, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Donor_ID))
+donor<-merge(donor, x, by.y = 'Var1', by.x = 'Var2')
+
+proportion_donor <- donor[, -ncol(donor)]
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+test<-pivot_longer(proportion_donor, c('C3-47', 'C3-48', 'C3-49', 'C3-50', 'C3-51', 'C3-52', 'C3-53'))
+a<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+proportion_dataset <- dataset[, -ncol(dataset)]
+for (col in colnames(proportion_dataset)[-1]) {
+proportion_dataset[[col]] <- proportion_dataset[[col]] / dataset$Freq
+}
+test<-pivot_longer(proportion_dataset, c('C3-47', 'C3-48', 'C3-49', 'C3-50', 'C3-51', 'C3-52', 'C3-53'))
+b<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+percent_dataset<-dataset[, -ncol(dataset)]
+col_sums<-colSums(percent_dataset[, -1])
+for (i in 2:ncol(percent_dataset)) {
+  percent_dataset[, i] <- (percent_dataset[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_dataset, c('C3-47', 'C3-48', 'C3-49', 'C3-50', 'C3-51', 'C3-52', 'C3-53'))
+d<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+percent_donor<-donor[, -ncol(donor)]
+col_sums<-colSums(percent_donor[, -1])
+for (i in 2:ncol(percent_donor)) {
+  percent_donor[, i] <- (percent_donor[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_donor, c('C3-47', 'C3-48', 'C3-49', 'C3-50', 'C3-51', 'C3-52', 'C3-53'))
+c<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+a + b + c + d
+
+dataset<-data.frame(table(astros$C4, astros$Dataset))
+dataset<-pivot_wider(dataset, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Dataset))
+dataset<-merge(dataset, x, by.y = 'Var1', by.x = 'Var2')
+donor<-data.frame(table(astros$C4, astros$Donor_ID))
+donor<-pivot_wider(donor, names_from = Var1, values_from = Freq)
+x<-data.frame(table(data$Donor_ID))
+donor<-merge(donor, x, by.y = 'Var1', by.x = 'Var2')
+
+proportion_donor <- donor[, -ncol(donor)]
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+for (col in colnames(proportion_donor)[-1]) {
+proportion_donor[[col]] <- proportion_donor[[col]] / donor$Freq
+}
+test<-pivot_longer(proportion_donor, c('C4-116', 'C4-117', 'C4-118', 'C4-119', 'C4-120', 'C4-121', 'C4-122', 'C4-123', 'C4-124', 'C4-125', 'C4-126', 'C4-127', 'C4-128'))
+a<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+proportion_dataset <- dataset[, -ncol(dataset)]
+for (col in colnames(proportion_dataset)[-1]) {
+proportion_dataset[[col]] <- proportion_dataset[[col]] / dataset$Freq
+}
+test<-pivot_longer(proportion_dataset, c('C4-116', 'C4-117', 'C4-118', 'C4-119', 'C4-120', 'C4-121', 'C4-122', 'C4-123', 'C4-124', 'C4-125', 'C4-126', 'C4-127', 'C4-128'))
+b<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Proportion", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+percent_dataset<-dataset[, -ncol(dataset)]
+col_sums<-colSums(percent_dataset[, -1])
+for (i in 2:ncol(percent_dataset)) {
+  percent_dataset[, i] <- (percent_dataset[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_dataset, c('C4-116', 'C4-117', 'C4-118', 'C4-119', 'C4-120', 'C4-121', 'C4-122', 'C4-123', 'C4-124', 'C4-125', 'C4-126', 'C4-127', 'C4-128'))
+d<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "Dataset") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+percent_donor<-donor[, -ncol(donor)]
+col_sums<-colSums(percent_donor[, -1])
+for (i in 2:ncol(percent_donor)) {
+  percent_donor[, i] <- (percent_donor[, i] / col_sums[i - 1]) * 100
+  }
+test<-pivot_longer(percent_donor, c('C4-116', 'C4-117', 'C4-118', 'C4-119', 'C4-120', 'C4-121', 'C4-122', 'C4-123', 'C4-124', 'C4-125', 'C4-126', 'C4-127', 'C4-128'))
+c<-ggplot(test, aes(x = name, y = value, fill = Var2)) +
+geom_bar(stat = "identity") +
+labs(x = "CellType", y = "Percent", fill = "donor") +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+a + b + c + d
+```
+
+
+## Fig 3-21
+```{r, eval = FALSE}
+ventricle<-subset(data, subset = C2_names == 'NN_1_Ventricular')
+DimPlot(ventricle, reduction = 'umap_scvi_hypo', group.by = 'C4_names') +
+  xlim(-4,2) +
+  ylim(-5,2) +
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank())
+Stacked_VlnPlot(ventricle, group.by = 'C4_names', c('SOX2', 'VIM', 'FGF10', 'NES', 'RAX', 'CRYM', 'FRZB', 'DIO2'), x_lab_rotate = 45)
+```
+
+## Fig 3-22
+```{r, eval = FALSE}
+#adding the code from the paper for making the UMAP plot and the heatmap of POMC and AGRP clusters 
+Idents(data)<-data@meta.data$C6
+pomc<-WhichCells(data, idents = c('C6-278', 'C6-279', 'C6-280'))
+agrp<-WhichCells(data, idents = c('C6-260'))
+data$pomcagrp <- ifelse(colnames(data) %in% pomc, 'POMC',
+                        ifelse(colnames(data) %in% agrp, 'AGRP', 'NO'))
+cols = c('POMC' = '#325A9BFF', 'AGRP' = '#B10DA1FF', 'NO' = 'lightgrey')
+DimPlot(data, group.by = 'pomcagrp', reduction = 'umap_scvi_hypo', raster = F, cols = cols) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(), legend.text = element_text(size = 25)) &
+  labs(title = element_blank())
+#Heatmap of POMC and ARGP clusters 
+heatmap_genes<-c('POMC', 'AGRP', 'LEPR', 'WIF1', 'CALCR', 'GABRG1', 'SOX3','SFRP2', 'OTP', 'NPY', 'PCSK1', 'PCSK2', 'NAT1', 'CPE', 'PAM')
+subset<-subset(data, idents = c('C6-278', 'C6-279', 'C6-280', 'C6-260'))
+#try with average expression of genes 
+avex<-AverageExpression(subset, features = heatmap_genes)
+#set the order of the clusters
+avex_reorder<-avex$RNA[,match(c('C6-278', 'C6-279', 'C6-280', 'C6-260'), colnames(avex$RNA))]
+clusters<-data.frame(colnames(avex_reorder))
+clusters$gene_cluster <- c('POMC', 'POMC', 'POMC', 'AGRP')
+rownames(clusters)<- clusters$colnames.avex_reorder.
+colnames(clusters) <- c("Cluster", "Cluster Type")
+
+my_colour = list(
+  Cluster = c(`C6-278` = 'yellow', `C6-279` = 'orange', `C6-280` = 'skyblue', `C6-260` = 'orange'),
+  `Cluster Type` = c(POMC = '#325A9BFF', AGRP = '#B10DA1FF'))
+
+avex<-t(log(avex_reorder+1, 2))
+pheatmap(avex, 
+         annotation_row = clusters,
+         annotation_colors =  my_colour,
+         color = viridis(256), 
+         border_color = 'lightgrey', 
+         cluster_rows = F, 
+         cluster_cols = F, 
+         breaks = seq(0,3, length.out = 256), 
+         fontsize = 10, 
+         gaps_row = 3,
+         gaps_col = c(2, 8, 10),
+         annotation_legend = FALSE,
+         cellwidth = 25, 
+         cellheight = 25, 
+         angle_col = 90, 
+         filename = '~/Dropbox/Thesis/Chapter3//Figs/POMC_AGRP_HEATMAP.png')
+```
+
+## Fig 3-23
+```{r, eval = FALSE}
+FeaturePlot(data, 'MC3R', order = T, reduction = 'umap_scvi_hypo', raster = F, cols = c('lightgrey', '#0A1172')) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(), legend.text = element_text(size = 15), plot.title = element_text(face = "italic", size = 20)) &
+  labs(title = 'MC3R')
+
+clusters<-merge(as.data.frame(table(data$C6)), as.data.frame(table(subset(data, MC3R>0, slot = 'counts')$C6)), by = 'Var1', all.x = T)
+clusters[is.na(clusters)] <- 0
+clusters$percent <- clusters$Freq.y / clusters$Freq.x * 100
+quantile(clusters$percent, c(0.9, 0.95, 0.98, 0.99))
+mc3r<-subset(data, MC3R>0, slot = 'counts')
+mc3r_cluster<-top_gene_clusters(data, mc3r, 0, 5.9, metadata_name = 'C6')
+mc3r_cluster<-reformat_table(mc3r_cluster, num_to_name = num_to_name, data = data, gene = 'MC3R')
+mc3r_cluster<-add_marker_genes(mc3r_cluster, mc3r_cluster$Cluster, markers)
+
+mc3r_cluster <- mc3r_cluster[order(mc3r_cluster$Percent_MC3R), ]
+mc3r_test<-as.character(mc3r_cluster$Cluster)
+mc3r_test <- gsub("-", ".", mc3r_test)
+
+mc3r_cluster_subset<-subset(data, idents = c("C6-125", "C6-279", "C6-280", "C6-243", "C6-283", "C6-212", "C6-291", "C6-196", "C6-288", "C6-289"))
+VlnPlot(mc3r_cluster_subset, c('MC3R', 'SATB2', 'GAL', 'GHRH', 'ADCYAP1', 'POMC', 'CARTPT', 'KISS1', 'TAC1',  'TAC3', 'AGRP', 'SLC17A6', 'SLC32A1', 'CHAT', 'SLC5A7', 'SLC18A2', 'TH'), group.by = 'C6', stack = T, flip = T)
+
+
+```
+
+Fig 3-25
+``` {r, eval = FALSE}
+FeaturePlot(data, 'MC4R', order = T, reduction = 'umap_scvi_hypo', raster = F, cols = c('lightgrey', '#0A1172')) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(), legend.text = element_text(size = 15), plot.title = element_text(face = "italic", size = 20)) &
+  labs(title = 'MC4R')
+
+clusters<-merge(as.data.frame(table(data$C6)), as.data.frame(table(subset(data, MC4R>0, slot = 'counts')$C6)), by = 'Var1', all.x = T)
+clusters[is.na(clusters)] <- 0
+clusters$percent <- clusters$Freq.y / clusters$Freq.x * 100
+quantile(clusters$percent, c(0.9, 0.95, 0.98, 0.99))
+mc4r<-subset(data, MC4R>0, slot = 'counts')
+mc4r_cluster<-top_gene_clusters(data, mc4r, 0, 20.7, metadata_name = 'C6')
+mc4r_cluster<-reformat_table(mc4r_cluster, num_to_name = num_to_name, data = data, gene = 'MC4R')
+mc4r_cluster<-add_marker_genes(mc4r_cluster, mc4r_cluster$Cluster, markers)
+
+mc4r_cluster <- mc4r_cluster[order(mc4r_cluster$Percent_MC4R), ]
+mc4r_test<-as.character(mc4r_cluster$Cluster)
+mc4r_test <- gsub("-", ".", mc4r_test)
+
+mc4r_cluster_subset<-subset(data, idents= c("C6-402", "C6-88",  "C6-276", "C6-295", "C6-181", "C6-407", "C6-112", "C6-224", "C6-253", "C6-43"))
+
+#looking at neuropeptide/homrone expression
+nps<-read.delim('../Reference-tables/neuropeptide_hormone_GO.txt')
+np_list<-list(nps$Gene.name)
+np_list<-np_list[[1]]
+x<-unique(np_list)
+x<-x[-46]
+np_list<-x
+np_list <- np_list[!(np_list %in% c('CGB5', 'CENPS-CORT', 'CGB8', 'CGB3', 'CGB1', 'INS-IGF2'))]
+
+#find out which genes are expressed in at least 10% of 1 cluster
+np_inc<-calc_percent_cluster(mc4r_cluster_subset, genes = np_list, metadata_name = 'C6')
+np_inc<-np_inc[, -grep("^AvEx_", colnames(np_inc))]
+np_inc<-np_inc[, !(colnames(np_inc) %in% colnames(np_inc)[colSums(np_inc) ==0])]
+np_inc<-np_inc[, !(colnames(np_inc) %in% colnames(np_inc)[apply(np_inc, 2, max)<25])]
+#removing genes that are highly expressed in all clusters
+np_inc<-np_inc[, !(colnames(np_inc) %in% c('CHGB', 'FBN1', 'COPA', 'VGF'))]
+#reorder the genes based on cluster expression & add relevant NT markers
+mc4r_nps<-c('KL', 'MME', 'INHA', 'AMH', 'GNRH1', 'IGF1', 'SST', 'CCK', 'FNDC5',  'ENHO',  'OXT', 'AVP', 'GAL', 'PENK', 'ADCYAP1','METRN', 'TRH', 'STC1', 'SLC17A6', 'SLC32A1', 'GAD1', 'GAD2', 'CHAT', 'SLC5A7', 'TPH2')
+
+VlnPlot(mc4r_cluster_subset, features =mc4r_nps, stack = TRUE, flip = T) + NoLegend()
+
+```
+
+## Fig 3-26 3-27
+```{r, eval = FALSE}
+FeaturePlot(data, 'GIPR', order = T, reduction = 'umap_scvi_hypo', raster = F, cols = c('lightgrey', '#0A1172')) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(), legend.text = element_text(size = 20)) &
+  labs(title = 'GIPR')
+DimPlot(data, reduction = 'umap_scvi_hypo', raster = F, group.by = 'C2_names', label = T) & NoLegend()
+Idents(data)<-data@meta.data$C2
+x<-subset(data, idents = 'C2-9')
+VlnPlot(x, c('GIPR', 'LMX1A', 'SLC17A6', 'SLC32A1', 'TH', 'DDC', 'SLC18A2'), group.by = 'C6', stack = T, flip = T) & NoLegend()
+
+```
+
+
+
+

@@ -1,0 +1,144 @@
+---
+title: "Hindbrain_NucSeq"
+author: "Georgina Dowsett"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, root.dir = '~/Dropbox/Thesis/Chapter2/Hindbrain/')
+```
+
+# Analysis and Plotting of snRNA-seq of the mouse hindbrain in the fed and fasted state
+
+This R Markdown document provides the code required for analysis of the snRNA-seq datset of mouse hindbrain in the fed and fasted state
+```{r, eval = FALSE}
+library(Seurat)
+library(dplyr)
+library(cowplot)
+library(ggplot2)
+library(hdf5r)
+library(tidyr)
+```
+
+## Loading and QC of the data
+
+First, the raw count matrices (already aligned to the mouse genome) are loaded and merged, since all 4 samples were run on the same chip, and only technical replicates were included for each feeding condition. Mitochondrial genes were flagged, and QC plots displaying the number of genes/nucleus, counts/nucleus and %mt-RNA/nucleus are looked at to assess the quality of the data:
+
+```{r, eval = FALSE}
+ntsadlib1<-Read10X_h5(filename = "Chapter2/Hindbrain/Raw_data/nts-adlib1.h5", use.names = FALSE)
+ntsadlib1<-CreateSeuratObject(count = ntsadlib1, project = "inhouse_NTS-AP_adlib1")
+ntsadlib1<-AddMetaData(ntsadlib1,"adlib",col.name="nutr.cond")
+ntsadlib2<-Read10X_h5(filename = "Chapter2/Hindbrain/Raw_data/nts-adlib2.h5", use.names = FALSE)
+ntsadlib2<-CreateSeuratObject(count = ntsadlib2, project = "inhouse_NTS-AP_adlib2")
+ntsadlib2<-AddMetaData(ntsadlib2,"adlib",col.name="nutr.cond")
+ntsfasted1<-Read10X_h5(filename = "Chapter2/Hindbrain/Raw_data/nts-fast1.h5", use.names = FALSE)
+ntsfasted1<-CreateSeuratObject(count = ntsfasted1, project = "inhouse_NTS-AP_fasted1")
+ntsfasted1<-AddMetaData(ntsfasted1,"fast",col.name="nutr.cond")
+ntsfasted2<-Read10X_h5(filename = "Chapter2/Hindbrain/Raw_data/nts-fast2.h5", use.names = FALSE)
+ntsfasted2<-CreateSeuratObject(count = ntsfasted2, project = "inhouse_NTS-AP_fasted2")
+ntsfasted2<-AddMetaData(ntsfasted2,"fast",col.name="nutr.cond")
+
+
+ntsmerged<-merge(ntsadlib1, c(ntsadlib2,ntsfasted1,ntsfasted2), add.cell.ids = c("ntsadlib1", "ntsadlib2","ntsfasted1","ntsfasted2"), project = "AP-adlib-merge")
+mito.genes<-c("ENSMUSG00000064357", "ENSMUSG00000064356", "ENSMUSG00000064351", "ENSMUSG00000064354", "ENSMUSG00000064358", "ENSMUSG00000064370", "ENSMUSG00000064341", "ENSMUSG00000064345", "ENSMUSG00000064360", "ENSMUSG00000064363", "ENSMUSG00000065947", "ENSMUSG00000064367", "ENSMUSG00000064368", "ENSMUSG00000064337", "ENSMUSG00000064339", "ENSMUSG00000064347", "ENSMUSG00000064349", "ENSMUSG00000064353", "ENSMUSG00000064369", "ENSMUSG00000064336", "ENSMUSG00000064359", "ENSMUSG00000064364", "ENSMUSG00000064342", "ENSMUSG00000064355", "ENSMUSG00000064340", "ENSMUSG00000064366", "ENSMUSG00000064344", "ENSMUSG00000064348", "ENSMUSG00000064372", "ENSMUSG00000064343", "ENSMUSG00000064361", "ENSMUSG00000064352", "ENSMUSG00000064365", "ENSMUSG00000064371", "ENSMUSG00000064338", "ENSMUSG00000064346", "ENSMUSG00000064350")
+all(mito.genes %in% rownames(ntsmerged))
+ntsmerged[["percent.mt"]]<-PercentageFeatureSet(ntsmerged, features = mito.genes)
+VlnPlot(ntsmerged, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+
+summary(ntsmerged$nCount_RNA)
+summary(ntsmerged$nFeature_RNA)
+
+dim(ntsmerged)
+```
+
+## Removing low quality cells and doublets
+
+By looking at the Violin plots I remove cells with greater than 0.2% mt-RNA (likely lower quality cells), cells with less than 1000 counts or cells with less than 200 genes, which are low quality/not whole intact nuclei. I also removed any cells with more than 6000 genes / nucleus as these are likely doublets. In this QC step 510 cells are removed from the data. 
+
+```{r, eval = FALSE}
+ntsmerged<-subset(ntsmerged, subset = percent.mt<0.2)
+ntsmerged<-subset(ntsmerged, subset = nCount_RNA>1000)
+ntsmerged<-subset(ntsmerged, subset = nFeature_RNA>200)
+ntsmerged<-subset(ntsmerged, subset = nFeature_RNA<6000)
+
+dim(ntsmerged)
+```
+## Normalization, Scaling, Principle Component Analysis
+Data was processed according to the standard seurat pipeline. Data was normalized using LogNormalize ("Feature counts for each cell are divided by the total counts for that cell and multiplied by the scale.factor. This is then natural-log transformed using log1p"). Next, highly variable genes are selected and data is scaled using ScaleData ("Shifts the expression of each gene, so that the mean expression across cells is 0; Scales the expression of each gene, so that the variance across cells is 1. This step gives equal weight in downstream analyses, so that highly-expressed genes do not dominate"). Principle component analysis is performed to allow for linear dimensional reduction of the data.
+
+```{r , eval = FALSE}
+ntsmerged<-NormalizeData(ntsmerged)
+ntsmerged<-FindVariableFeatures(ntsmerged,object = )
+all.genes<-rownames(ntsmerged)
+ntsmerged<-ScaleData(ntsmerged, features = all.genes)
+ntsmerged<-RunPCA(ntsmerged,ndims=30)
+ElbowPlot(ntsmerged,ndims = 30)
+ntsmerged<-RunTSNE(ntsmerged,dims=1:25)
+ntsmerged<-FindNeighbors(ntsmerged,dims=1:25)
+ntsmerged<-FindClusters(ntsmerged,resolution = 2.5)
+DimPlot(ntsmerged,label,T)
+```
+
+## Removing clusters which display high expression of multiple cell type marker genes, or low quality clusters 
+
+# remove clusters 35 and 39 (doublets)
+```{r, eval = FALSE}
+ntsmerged<-subset(ntsmerged,idents=c(0:34,36:38,40:44))
+
+ntsmerged<-NormalizeData(ntsmerged)
+ntsmerged<-FindVariableFeatures(ntsmerged)
+all.genes<-rownames(ntsmerged)
+ntsmerged<-ScaleData(ntsmerged, features = all.genes)
+ntsmerged<-RunPCA(ntsmerged,ndims=30)
+ElbowPlot(ntsmerged,ndims = 30)
+ntsmerged<-RunTSNE(ntsmerged,dims=1:25)
+ntsmerged<-FindNeighbors(ntsmerged,dims=1:25)
+ntsmerged<-FindClusters(ntsmerged,resolution = 2.5)
+DimPlot(ntsmerged,label=T)
+```
+
+# Further remove clusters 30,41 (Oligos)
+```{r, eval = FALSE}
+ntsmerged<-subset(ntsmerged,idents=c(0:29,31:40,42:43))
+
+ntsmerged<-NormalizeData(ntsmerged)
+ntsmerged<-FindVariableFeatures(ntsmerged)
+all.genes<-rownames(ntsmerged)
+ntsmerged<-ScaleData(ntsmerged, features = all.genes)
+ntsmerged<-RunPCA(ntsmerged,ndims=30)
+ElbowPlot(ntsmerged,ndims = 30)
+ntsmerged<-RunTSNE(ntsmerged,dims=1:25)
+ntsmerged<-FindNeighbors(ntsmerged,dims=1:25)
+ntsmerged<-FindClusters(ntsmerged,resolution = 2.5)
+DimPlot(ntsmerged,label=T)
+```
+
+# Further remove clusters 42 (Oligos)
+```{r, eval = FALSE}
+ntsmerged<-subset(ntsmerged,idents=c(0:41))
+ntsmerged<-NormalizeData(ntsmerged)
+ntsmerged<-FindVariableFeatures(ntsmerged)
+all.genes<-rownames(ntsmerged)
+ntsmerged<-ScaleData(ntsmerged, features = all.genes)
+ntsmerged<-RunPCA(ntsmerged,ndims=30)
+ElbowPlot(ntsmerged,ndims = 30)
+ntsmerged<-RunTSNE(ntsmerged,dims=1:25)
+ntsmerged<-FindNeighbors(ntsmerged,dims=1:25)
+ntsmerged<-FindClusters(ntsmerged,resolution = 2.5)
+DimPlot(ntsmerged,label=T)
+```
+
+# Finding marker genes for each cluster & DGE
+```{r, eval = FALSE}
+allmarkers<-FindAllMarkers(ntsmerged)
+for (i in 0:40){
+  print(i);
+  marker[[i+1]]<-FindMarkers(ntsmerged,ident.1 = 'fast',group.by = "nutr.cond",subset.ident = i)
+  }
+for(i in 1:41){
+  print(paste0("group ",i-1));
+  print(table(marker[[i]]$p_val<0.05))
+}
+```
+

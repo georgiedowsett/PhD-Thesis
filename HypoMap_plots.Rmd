@@ -1,0 +1,693 @@
+---
+title: "HypoMap_Plots"
+author: "Georgina Dowsett"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, root.dir = '~/Dropbox/Thesis/Chapter2/HypoMap/')
+```
+
+# Analysis and Plotting of the HypoMap dataset
+
+This R Markdown document provides the code required for further analysis and plotting of the HypoMap dataset. 
+Please see Lukas Steuernagels Git repository for the integration code (performed by Lukas).
+
+```{r message = FALSE}
+library(Seurat)
+library(dplyr)
+library(cowplot)
+library(ggplot2)
+library(hdf5r)
+library(tidyr)
+library(patchwork)
+library(viridis)
+library(viridisLite)
+library(stringr)
+library(tidyverse)
+library(scCustomize)
+library(RColorBrewer)
+source('~/Dropbox/Data/ST_forhumanhypomap/Scripts/RNAseqSTUtils.R')
+```
+
+```{r echo = FALSE}
+sessionInfo()
+```
+
+## Loading of the dataset
+
+Here, we load the RDS file and marker genes files of HypoMap
+
+You can perform quick gene look ups of the HypoMap using the CellxGene website here: https://www.mrl.ims.cam.ac.uk/hypomap-a-unified-single-cell-gene-expression-atlas-of-the-mouse-hypothalamus/ 
+
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+data<-readRDS('~/Dropbox/Data/mouse_hypomap/hypoMap_v2.rds')
+markers<-read_tsv('~/Dropbox/Data/mouse_hypomap/hypoMap_v2_markers_all.tsv')
+
+#Check the data 
+DimPlot(data, raster = F, group.by = 'C66_named', label = T) + NoLegend()
+```
+
+## Table 2-2
+This table will provide the starting info for a table in the results providing information about which datasets contribute to the HypoMap
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+info<-data.frame(table(data$Dataset))
+write.table(info, '~/Dropbox/Thesis/Chapter2/HypoMap/Figures_Tables/dataset_info.txt', sep = '\t', row.names = F)
+```
+
+## Figure 2-14
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+DimPlot(data, group.by = 'Author_Class_Curated', raster = F, label = T, label.size = 6) +
+  NoLegend() + 
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) +
+  ggtitle(element_blank())
+
+FeaturePlot(data, 'Snap25', raster = F) +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Mog', raster = F) +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Pdgfra', raster = F) +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Slc1a2', raster = F) +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Bcas1', raster = F) +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Ly86', raster = F) +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Emcn', raster = F) +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+```
+
+
+## Figure 2-15
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+FeaturePlot(data, 'Slc17a6', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Slc32a1', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Tbx3', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Nr5a1', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Sim1', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Rgs16', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Lmx1a', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+FeaturePlot(data, 'Lhx6', raster = F, cols = c(rgb(0.9,0.9,0.9,0.3), 'darkmagenta'), order = T) +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+```
+
+
+## Fig 2-16
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+DimPlot_scCustom(data, raster = F, group.by = 'Dataset') +
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+
+```
+Figure 2-17 was taken from the HypoMap paper 
+
+## Fig 2-18
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+Idents(data)<-'C2'
+neurons<-subset(data, idents = 'C2-1')
+#Creating a dot plot of neuronal cluster markers 
+
+x<-data.frame(table(neurons$C66))
+subset_markers <- markers[markers$cluster_id %in% x$Var1, ]
+subset_markers <- subset_markers %>%
+  group_by(cluster_id) %>%
+  slice(which.max(specificity)) %>%
+  ungroup()
+genes<-subset_markers$gene
+genes<-unique(genes)
+DotPlot(neurons, features = genes, group.by = 'C66_named', scale = F) +
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
+
+## Fig 2-19 OLs
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+Idents(data)<-'C7'
+oligos<-subset(data, idents = 'C7-4')
+FeaturePlot(oligos, 
+            c('Mog', 'Mbp', 'Olig2', 'Bmp4', 'Pdgfra', 'Cspg4'), 
+            cols = c(rgb(0.8,0.8,0.8,0.2), 'darkgreen'), 
+            order = F, 
+            ncol = 2) &
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+
+FeaturePlot(oligos, 
+            c('Gipr'), 
+            cols = c('lightgrey', 'brown4'), 
+            order = T, 
+            ncol = 1) &
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+
+```
+
+
+## Fig 2-20 Tanycytes 
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+Idents(data)<-'C25'
+ependymal<-subset(data, idents = 'C25-17')
+VlnPlot(ependymal, c('Col23a1', 'Rax', 'Dio2', 'Mafb', 'Necab2', 'Pdzph1', 'Frzb', 'Scn7a', 'Adm', 'Crym', 'Cd59a', 'Slc17a8', 'Vcan', 'Col25a1', 'Cacna2d2', 'Stoml3', 'Nes','Ttr'), stack = T, group.by = 'C185_named') + NoLegend()
+```
+
+## NT work on neuronal population 
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+NT_genes<-c('Slc17a6', 'Slc17a7', 'Slc17a8', 'Slc32a1', 'Gad1', 'Gad2', 'Slc6a5', 'Slc6a9', 'Slc18a3', 'Chat', 'Slc5a7', 'Slc6a3', 'Ddc', 'Th', 'Pnmt', 'Dbh', 'Tph2', 'Slc6a4', 'Hdc')
+neurons_NT<-calc_percent_cluster(neurons, genes = NT_genes, metadata_name = 'C465_named')
+
+nt_model<-neurons_NT
+nt_model[nt_model<30] <- 0
+nt_model[nt_model>=30]<-1
+nt_model<-nt_model[,1:19]
+
+nt_model<-calc_NTs(nt_model)
+
+rows_with_na <- rownames(nt_model[is.na(nt_model$NTs), ])
+
+subset_neurons_NT <- neurons_NT[rownames(neurons_NT) %in% rows_with_na, ]
+for (row_name in rownames(subset_neurons_NT)) {
+  if (grepl("GLU", row_name)) {
+    nt_model[row_name, "NTs"] <- "GLUT2"
+    } else if (grepl("GABA", row_name)) {
+      nt_model[row_name, "NTs"] <- "GABA"
+    }
+  }
+
+Idents(neurons)<-'C465_named'
+neuron_levels <- levels(neurons)
+nt_model <- nt_model[neuron_levels, ]
+new.cluster.ids <- nt_model$NTs
+names(new.cluster.ids)<-levels(neurons)
+neurons<-RenameIdents(neurons, new.cluster.ids)
+neurons$NTs<-neurons@active.ident
+
+Idents(data)<-'C465_named'
+data<-AddMetaData(data, metadata = neurons$NTs, col.name = 'NTs')
+
+DimPlot_scCustom(data, group.by = 'NTs', raster = F)
+```
+
+## NP work on the neuronal population 
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+
+#full code?
+NPs<-read.delim('~/Dropbox/Thesis/Chapter2/Hindbrain/Reference_tables/Neuropeptides-list_Langlieb-paper.csv', sep = ',')
+mouse_anno<-read.delim('~/Dropbox/Thesis/Chapter2/Hindbrain/Reference_tables/mouse_full_annotations.txt')
+NPs <- NPs %>%
+mutate(Gene = str_to_title(Neuropeptide))
+#we checked to see if all the names are synonymous with the gene names.
+gene_names<-read.delim("~/Dropbox/Thesis/Chapter2/Hindbrain/Reference_tables/mouse_genes_names_Ens100_rmdup.txt",row.names=3)
+genes_to_ens<-function(gene_symbol){
+return(as.character(gene_names[gene_symbol,1]))
+}
+genes_to_ens(NPs$Gene)
+#all fine apart from Ins which in mouse is Ins2 and Ins1, and Rln2 which i think does not exist in mice???
+#adding Gcg and insl genes
+np_genes<-NPs$Gene
+np_genes[26]<-'Ins1'
+np_genes[53]<-'Ins2'
+np_genes<-append(np_genes, c('Gcg', 'Insl3', 'Insl5', 'Kiss1'))
+#also adding NP/Hormones from the HPA
+hpa<-read.delim('~/Dropbox/Thesis/Chapter3/Reference-tables/proteinatlas.tsv')
+hpa_np <- hpa[grepl("Hormone", hpa$Molecular.function, fixed = FALSE) | grepl("Neuropeptide", hpa$Molecular.function, fixed = FALSE),]
+hpa_np <- hpa_np %>%
+mutate(Gene = str_to_title(Gene))
+np_genes_hpa<-hpa_np$Gene
+genes_to_ens(np_genes_hpa)
+np_genes_subset<-np_genes_hpa[c(1:14,16,18:20,22:30,32:37,39:47,50:74,76:101,103,105,108,109:112)]
+np_genes_final<-append(np_genes, np_genes_subset)
+np_genes_final<-unique(np_genes_final)
+#this list was then inspected and any genes that were not neuropeptides or established hormones were removed mannually
+
+np_genes_final<-read.delim('~/Dropbox/Thesis/Chapter2/HypoMap/Reference_Tables/NP_mouse_curated_final.txt')
+np_genes_final<-np_genes_final$Gene
+np_genes_final<-np_genes_final[-28]
+
+#excluding Mln 
+mouse_nps<-calc_percent_cluster(neurons, genes = np_genes_final, metadata_name = 'C465')
+mouse_nps_pct<-mouse_nps[1:95]
+
+#Inspecting expression levels of NPs with much higher expression levels accross the dataset
+#plot eg
+test<-mouse_nps
+test$Cluster<-rownames(test)
+ggplot(data = test, aes(x = Agrp, y = reorder(Cluster, Agrp), fill = AvEx_Agrp)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis(option = "viridis") +
+  labs(x = "Percentage of Cells Expressing Pomc", y = "Cluster") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 12))
+
+mouse_nps_pct$NPs <- apply(mouse_nps_pct, 1, function(row) {
+  np_genes <- colnames(mouse_nps_pct)[row > 30 & !colnames(mouse_nps_pct) %in% c("Adcyap1", 
+                                                                                             "Agt", 
+                                                                                             "Avp",
+                                                                                             "Cartpt", 
+                                                                                             "Cck", 
+                                                                                             "Gal", 
+                                                                                             "Nts", 
+                                                                                             "Oxt", 
+                                                                                             "Penk", 
+                                                                                             "Pdyn", 
+                                                                                             "Pmch", 
+                                                                                             "Pnoc", 
+                                                                                             "Sst", 
+                                                                                             "Tac1",
+                                                                                 "Pomc")]
+  if (row['Adcyap1'] > 70) {
+    np_genes <- c(np_genes, 'Adcyap1')
+  }
+  if (row['Agt'] > 80) {
+    np_genes <- c(np_genes, 'Agt')
+  }
+  if (row['Avp'] > 80) {
+    np_genes <- c(np_genes, 'Avp')
+  }
+  if (row['Cartpt'] > 75) {
+    np_genes <- c(np_genes, 'Cartpt')
+  }
+  if (row['Cck'] > 75) {
+    np_genes <- c(np_genes, 'Cck')
+  }
+  if (row['Gal'] > 80) {
+    np_genes <- c(np_genes, 'Gal')
+  }
+  if (row['Nts'] > 70) {
+    np_genes <- c(np_genes, 'Nts')
+  }
+  if (row['Oxt'] > 70) {
+    np_genes <- c(np_genes, 'Oxt')
+  }
+  if (row['Penk'] > 75) {
+    np_genes <- c(np_genes, 'Penk')
+  }
+  if (row['Pdyn'] > 60) {
+    np_genes <- c(np_genes, 'Pdyn')
+  }
+  if (row['Pmch'] > 60) {
+    np_genes <- c(np_genes, 'Pmch')
+  }
+  if (row['Pnoc'] > 60) {
+    np_genes <- c(np_genes, 'Pnoc')
+  }
+  if (row['Sst'] > 80) {
+    np_genes <- c(np_genes, 'Sst')
+  }
+  if (row['Tac1'] > 80) {
+    np_genes <- c(np_genes, 'Tac1')
+  }
+  if (row['Pomc'] > 50) {
+    np_genes <- c(np_genes, 'Pomc')
+  }
+  if (length(np_genes) > 0) {
+    if (!is.na(row['NPs']) && row['NPs'] != '') {
+      return(paste(row['NPs'], paste(np_genes, collapse = '|'), sep = '|'))
+    } else {
+      return(paste(np_genes, collapse = '|'))
+    }
+  } else {
+    return(row['NPs'])
+  }
+})
+
+
+Idents(neurons)<-'C465'
+neuron_levels <- levels(neurons)
+mouse_nps_pct <- mouse_nps_pct[neuron_levels, ]
+new.cluster.ids <- mouse_nps_pct$NPs
+names(new.cluster.ids)<-levels(neurons)
+neurons<-RenameIdents(neurons, new.cluster.ids)
+neurons$NPs<-neurons@active.ident
+
+# Group NP and NT info together 
+table<-data.frame(neurons$C465_named, neurons$NTs, neurons$NPs)
+table<- table %>%
+  group_by(neurons.C465_named) %>%
+  slice(1) %>%
+  ungroup()
+write.table(table, 'HypoMap/Figures_Tables/6_HypoMap_NT_NP_expression.txt', sep = '\t', row.names = F)
+
+```
+
+
+## Fig 2-21 2-22
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+FeaturePlot(data, c('Pomc', 'Agrp'), cols = c('lightgrey', 'darkgreen'), ncol = 2, raster = F) &
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+
+pomc_clusters<-mouse_nps[, c('Pomc', 'AvEx_Pomc')]
+pomc_clusters<-pomc_clusters[order(-pomc_clusters$Pomc),]
+pomc_clusters<-pomc_clusters[1:10,]
+pomc_clusters$cluster<-factor(rownames(pomc_clusters))
+
+ggplot(data = pomc_clusters, aes(x = Pomc, y = reorder(cluster, Pomc), fill = AvEx_Pomc)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis(option = "viridis") +
+  labs(x = "Percentage of Cells Expressing Pomc", y = "Cluster") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 12))
+
+agrp_clusters<-mouse_nps[, c('Agrp', 'AvEx_Agrp')]
+agrp_clusters<-agrp_clusters[order(-agrp_clusters$Agrp),]
+agrp_clusters<-agrp_clusters[1:10,]
+agrp_clusters$cluster<-factor(rownames(agrp_clusters))
+
+ggplot(data = agrp_clusters, aes(x = Agrp, y = reorder(cluster, Agrp), fill = AvEx_Agrp)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis(option = "viridis") +
+  labs(x = "Percentage of Cells Expressing Agrp", y = "Cluster") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 12))
+
+Idents(neurons)<-'C465'
+
+pomc<-subset(neurons, idents = c('C465-123', 'C465-122', 'C465-126', 'C465-125') )
+pomc_markers<-FindAllMarkers(pomc, only.pos = T)
+
+
+#looking at GPCR expression in the pomc clusters 
+#to do this we created a subset of markergenes from the whole marker set & marker genes from just the pomc clusters that are gpcrs and show expression 
+#also show expression of known marker genes for the pomc clusters and enzymes used in the creation of pomc products 
+mouse_anno<-read.delim('~/Dropbox/Thesis/Chapter2/Hindbrain/Reference_tables/mouse_full_annotations.txt')
+gpcr<-mouse_anno[mouse_anno$Type.s. == 'G-protein coupled receptor',]
+test<-markers[markers$cluster_id %in% c('C465-122', 'C465-123', 'C465-125', 'C465-126') & markers$gene %in% gpcr$Gene.name,]
+gpcr_markers<-unique(test$gene)
+test<-pomc_markers[pomc_markers$gene %in% gpcr$Gene.name,]
+gpcr_markers<-append(gpcr_markers, test$gene)
+gpcr_markers<-unique(gpcr_markers)
+VlnPlot(pomc, c('Pomc', 'Cartpt', 'Slc17a6', 'Lepr', 'Anxa2', 'Prdm12', 'Ttr', 'Glipr1', 'Htr2c', 'Esr1', 'Pgr', 'Pcsk1', 'Pcsk2', 'Nat1', 'Cpe', 'Pam', 'Prlr', 'Glp1r', 'Calcr', gpcr_markers), group.by = 'C465', stack = T, flip = T) + NoLegend()
+
+Idents(neurons)<-'C66'
+agrp<-subset(neurons, idents = 'C66-46')
+
+table(agrp$C465_named, agrp$NTs)
+table(agrp$C465_named, agrp$NPs)
+
+Idents(agrp)<-'C465'
+
+agrp_markers<-FindAllMarkers(agrp, only.pos = T)
+
+#looking at GPCR expression in the pomc clusters 
+#to do this we created a subset of markergenes from the whole marker set & marker genes from just the pomc clusters that are gpcrs and show expression 
+#also show expression of known marker genes for the pomc clusters and enzymes used in the creation of pomc products 
+mouse_anno<-read.delim('~/Dropbox/Thesis/Chapter2/Hindbrain/Reference_tables/mouse_full_annotations.txt')
+gpcr<-mouse_anno[mouse_anno$Type.s. == 'G-protein coupled receptor',]
+test<-markers[markers$cluster_id %in% c('C465-286', 'C465-287', 'C465-288', 'C465-289', 'C465-290') & markers$gene %in% gpcr$Gene.name,]
+gpcr_markers<-unique(test$gene)
+test<-agrp_markers[agrp_markers$gene %in% gpcr$Gene.name,]
+gpcr_markers<-append(gpcr_markers, test$gene)
+gpcr_markers<-unique(gpcr_markers)
+VlnPlot(agrp, c('Agrp', 'Npy', 'Sst', 'Pnoc', 'Acvr1c', 'Serpina3n', 'Lepr', 'Otp', 'Ghr', 'Serpina3n', 'Corin', gpcr_markers), group.by = 'C465', stack = T, flip = T) + NoLegend()
+
+
+
+```
+
+## Fig 2-23 2-24
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+FeaturePlot(data, c('Mc3r', 'Mc4r'), cols = c('lightgrey', 'darkgreen'), ncol = 2, raster = F, order = T) &
+  theme(axis.line = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+
+Idents(data)<-'C465_named'
+melanocortin<-calc_percent_cluster(data, c('Mc3r', 'Mc4r', 'Lepr', 'Calcr', 'Glp1r', 'Gipr'), metadata_name = 'C465_named')
+melanocortin$cluster<-rownames(melanocortin)
+
+#lookin at the the top 50 mc4r populations 
+mc4r_clusters<-melanocortin[, c('Mc4r', 'AvEx_Mc4r')]
+mc4r_clusters<-mc4r_clusters[order(-mc4r_clusters$Mc4r),]
+mc4r_clusters<-mc4r_clusters[1:50,]
+mc4r_clusters$cluster<-factor(rownames(mc4r_clusters))
+
+ggplot(data = mc4r_clusters, aes(x = Mc4r, y = reorder(cluster, Mc4r), fill = AvEx_Mc4r)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis(option = "viridis") +
+  labs(x = "Percentage of Cells Expressing Mc4r", y = "Cluster") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 12))
+
+mc3r_clusters<-melanocortin[, c('Mc3r', 'AvEx_Mc3r')]
+mc3r_clusters<-mc3r_clusters[order(-mc3r_clusters$Mc3r),]
+mc3r_clusters<-mc3r_clusters[1:50,]
+mc3r_clusters$cluster<-factor(rownames(mc3r_clusters))
+
+ggplot(data = mc3r_clusters, aes(x = Mc3r, y = reorder(cluster, Mc3r), fill = AvEx_Mc3r)) +
+  geom_bar(stat = "identity") +
+  scale_fill_viridis(option = "viridis") +
+  labs(x = "Percentage of Cells Expressing Mc3r", y = "Cluster") +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 18), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 12))
+
+Idents(neurons)<-'C465'
+mc3r<-subset(neurons, idents = c('C465-287', 'C465-122', 'C465-246', 'C465-284', 'C465-64', 'C465-285', 'C465-241', 'C465-319', 'C465-286', 'C465-67', 'C465-71', 'C465-71', 'C465-283', 'C465-288', 'C465-63', 'C465-62'))
+
+#Creating a table providing an overview of information about the top 15 mc3r clusters: 
+mc3r_info<-data.frame(table(mc3r$C465_named, mc3r$NTs))
+mc3r_info<-mc3r_info[mc3r_info$Freq>0,]
+
+x<-data.frame(table(mc3r$C465_named, mc3r$NPs))
+x<-x[x$Freq>0,]
+
+mc3r_info<-merge(mc3r_info, x, by = 'Var1', all.x = T)
+
+region<-data.frame(table(mc3r$C465_named, mc3r$Region_predicted))
+region<-region[region$Freq>0,]
+
+mc3r_info<-merge(mc3r_info, region, by = 'Var1', all.x = T)
+
+Idents(mc3r)<-'C465_named'
+mc3r_markers<-FindAllMarkers(mc3r, only.pos = T)
+
+#adding top marker genes for this cluster. 
+for (i in mc3r_info$Var1) {
+x<- subset(markers, subset = cluster_name == i)
+x <- x[!grepl("Rik$|^Gm\\d+|^Mir", x$gene), ]
+x <- x[order(-x$specificity), ]
+x <- x$gene[1:4]
+row_index <- which(mc3r_info$Var1 == i)
+x <- paste(x, collapse = "|")
+mc3r_info[row_index, "gene_markers"] <- x
+}
+
+#Highlighting what gpcrs are exprtessed in the mc3r clusters 
+mouse_anno<-read.delim('~/Dropbox/Thesis/Chapter2/Hindbrain/Reference_tables/mouse_full_annotations.txt')
+gpcr<-mouse_anno[mouse_anno$Type.s. == 'G-protein coupled receptor',]
+gpcr_mc3r<-calc_percent_cluster(mc3r, gpcr$Gene.name, metadata_name = 'C465_named')
+gpcr_mc3r<-gpcr_mc3r[,which(colSums(gpcr_mc3r>10)>0)]
+gpcr_mc3r<-gpcr_mc3r[,1:135]
+columns_to_keep <- !grepl("^Gpr", colnames(gpcr_mc3r))
+gpcr_mc3r_filtered <- gpcr_mc3r[, columns_to_keep]
+
+gpcr_mc3r_filtered$GPCRs <- character(nrow(gpcr_mc3r_filtered))
+for (i in 1:nrow(gpcr_mc3r_filtered)) {
+selected_columns <- names(gpcr_mc3r_filtered)[gpcr_mc3r_filtered[i, ] > 20]
+gpcr_mc3r_filtered$GPCRs[i] <- paste(selected_columns, collapse = '|')
+}
+
+#there are lots of gpcrs expressed, so instead we are only going to display the GPCR merker genes.. in the main figures. we can show all GPCR genes expressed in a supp table perhaps? 
+mouse_anno<-read.delim('~/Dropbox/Thesis/Chapter2/Hindbrain/Reference_tables/mouse_full_annotations.txt')
+gpcr<-mouse_anno[mouse_anno$Type.s. == 'G-protein coupled receptor',]
+test<-markers[markers$cluster_name %in% mc3r_info$Var1 & markers$gene %in% gpcr$Gene.name,]
+#gpcr_markers<-unique(test$gene)
+test1<-mc3r_markers[mc3r_markers$gene %in% gpcr$Gene.name,]
+
+mc3r_info$GPCR_markers<-character(nrow(mc3r_info))
+for (i in 1:nrow(mc3r_info)){
+  matching_clusters_test<-test[test$cluster_name == mc3r_info$Var1[i], 'gene']
+  matching_clusters_test1<-test1[test1$cluster == mc3r_info$Var1[i], 'gene']
+  x<-append(matching_clusters_test$gene, matching_clusters_test1)
+  x<-unique(x)
+  mc3r_info$GPCR_markers[i] <- paste(x, collapse = '|')
+}
+#add mc3r percent and avex
+mc3r_data<-melanocortin[, grep('Mc3r', colnames(melanocortin), ignore.case = T)]
+mc3r_data$cluster<-rownames(mc3r_data)
+mc3r_info<-merge(mc3r_info, mc3r_data, by.x = 'Var1', by.y = 'cluster', all.x = T)
+#tidy up table
+mc3r_info <- mc3r_info %>%
+select(-starts_with("Freq")) %>%  # Remove columns starting with "Freq"
+rename(
+Cluster = Var1,
+Neurotransmitters = Var2.x,
+Neuropeptides = Var2.y,
+Predicted_Region = Var2,
+Percent_Mc3r = Mc3r
+)
+
+write.table(mc3r_info, '~/Dropbox/Thesis/Chapter2/HypoMap/Figures_Tables/Mc3r_info_table.txt', sep = '\t', row.names = F)
+
+#Doing the same for MC4R clusters 
+Idents(neurons)<-'C465'
+mc4r<-subset(neurons, idents = c('C465-75', 'C465-76', 'C465-62', 'C465-61', 'C465-67', 'C465-84', 'C465-73', 'C465-66', 'C465-94', 'C465-83'))
+
+#Creating a table providing an overview of information about the top 15 mc3r clusters: 
+mc4r_info<-data.frame(table(mc4r$C465_named, mc4r$NTs))
+mc4r_info<-mc4r_info[mc4r_info$Freq>0,]
+
+x<-data.frame(table(mc4r$C465_named, mc4r$NPs))
+x<-x[x$Freq>0,]
+
+mc4r_info<-merge(mc4r_info, x, by = 'Var1', all.x = T)
+
+region<-data.frame(table(mc4r$C465_named, mc4r$Region_predicted))
+region<-region[region$Freq>0,]
+
+mc4r_info<-merge(mc4r_info, region, by = 'Var1', all.x = T)
+
+Idents(mc4r)<-'C465_named'
+mc4r_markers<-FindAllMarkers(mc4r, only.pos = T)
+
+#adding top marker genes for this cluster. 
+for (i in mc4r_info$Var1) {
+  x<- subset(markers, subset = cluster_name == i)
+  x <- x[!grepl("Rik$|^Gm\\d+|^Mir", x$gene), ]
+  x <- x[order(-x$specificity), ]
+  x <- x$gene[1:4]
+  row_index <- which(mc4r_info$Var1 == i)
+  x <- paste(x, collapse = "|")
+  mc4r_info[row_index, "gene_markers"] <- x
+}
+
+#Highlighting what gpcrs are exprtessed in the mc4r clusters 
+gpcr_mc4r<-calc_percent_cluster(mc4r, gpcr$Gene.name, metadata_name = 'C465_named')
+gpcr_mc4r<-gpcr_mc4r[,which(colSums(gpcr_mc4r>10)>0)]
+gpcr_mc4r<-gpcr_mc4r[,1:109]
+columns_to_keep <- !grepl("^Gpr", colnames(gpcr_mc4r))
+gpcr_mc4r_filtered <- gpcr_mc4r[, columns_to_keep]
+
+gpcr_mc4r_filtered$GPCRs <- character(nrow(gpcr_mc4r_filtered))
+for (i in 1:nrow(gpcr_mc4r_filtered)) {
+selected_columns <- names(gpcr_mc4r_filtered)[gpcr_mc4r_filtered[i, ] > 20]
+gpcr_mc4r_filtered$GPCRs[i] <- paste(selected_columns, collapse = '|')
+}
+
+#there are lots of gpcrs expressed, so instead we are only going to display the GPCR merker genes.. in the main figures. we can show all GPCR genes expressed in a supp table perhaps? 
+test<-markers[markers$cluster_name %in% mc4r_info$Var1 & markers$gene %in% gpcr$Gene.name,]
+#gpcr_markers<-unique(test$gene)
+test1<-mc4r_markers[mc4r_markers$gene %in% gpcr$Gene.name,]
+
+mc4r_info$GPCR_markers<-character(nrow(mc4r_info))
+for (i in 1:nrow(mc4r_info)){
+  matching_clusters_test<-test[test$cluster_name == mc4r_info$Var1[i], 'gene']
+  matching_clusters_test1<-test1[test1$cluster == mc4r_info$Var1[i], 'gene']
+  x<-append(matching_clusters_test$gene, matching_clusters_test1)
+  x<-unique(x)
+  mc4r_info$GPCR_markers[i] <- paste(x, collapse = '|')
+}
+#add mc4r percent and avex
+mc4r_data<-melanocortin[, grep('mc4r', colnames(melanocortin), ignore.case = T)]
+mc4r_data$cluster<-rownames(mc4r_data)
+mc4r_info<-merge(mc4r_info, mc4r_data, by.x = 'Var1', by.y = 'cluster', all.x = T)
+#tidy up table
+mc4r_info <- mc4r_info %>%
+select(-starts_with("Freq")) %>%  # Remove columns starting with "Freq"
+rename(
+Cluster = Var1,
+Neurotransmitters = Var2.x,
+Neuropeptides = Var2.y,
+Predicted_Region = Var2,
+Percent_Mc4r = Mc4r
+)
+
+write.table(mc4r_info, '~/Dropbox/Thesis/Chapter2/HypoMap/Figures_Tables/mc4r_info_table.txt', sep = '\t', row.names = F)
+
+```
+
+## Fig 2-25 
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+Idents(data)<-'Dataset'
+dowsett<-WhichCells(data, idents ='Dowsett10xnuc')
+data$NucSeq <- ifelse(colnames(data) %in% dowsett, 'NucSeq', 'SingleCell')
+
+DimPlot(data, raster = F, group.by = 'NucSeq', cols = c('darkblue', rgb(0.9,0.9,0.9,0.1))) +
+theme(axis.line = element_blank(),
+axis.title = element_blank(),
+axis.text = element_blank(),
+axis.ticks = element_blank())
+```
+
+

@@ -1,0 +1,181 @@
+---
+title: "Human_ST_Plots"
+author: "Georgina Dowsett"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, root.dir = '~/Dropbox/Thesis/Chapter3/')
+```
+
+
+# Plotting of snRNA-seq data from the human hypothalamus for Thesis Figures
+This R Markdown document provides the code required for plots of the snRNA-seq datset of human hypothalamus
+```{r message = FALSE}
+library(Seurat)
+library(ggplot2)
+library(tidyverse) 
+library(scCustomize)
+library(patchwork)
+library(RColorBrewer)
+library(gridExtra)
+library(viridis)
+library(viridisLite)
+library(scales)
+source('~/Dropbox/Data/ST_forhumanhypomap/Scripts/RNAseqSTUtils.R')
+```
+
+```{r echo = FALSE}
+sessionInfo()
+```
+## Load the data and set output folder and load useful functions
+```{r, eval = FALSE}
+st<-readRDS('~/Dropbox/Data/ST_forhumanhypomap/data/Spatial/st-withc2lclusters-correct-img-orientation-230822.RDS')
+markers<-read.delim('~/Dropbox/Data/ST_forhumanhypomap/data/markers_final.txt')
+num_to_name<-read.delim('~/Dropbox/Data/ST_forhumanhypomap/data/NucSeq/human_hypo_combined_annotation_overview.txt')
+results_folder<-'~/Dropbox/Thesis/Chapter3/Figs/'
+```
+## Fig 3-6
+```{r, eval = FALSE}
+DefaultAssay(st)<-'Spatial'
+DefaultSpatialColors <- colorRampPalette(colors = rev(x = brewer.pal(n = 11, name = "Spectral")))
+
+a<-SpatialFeaturePlot(st, 'nCount_Spatial', image = 'slice5A', image.alpha = 0)
+b<-SpatialFeaturePlot(st, 'nCount_Spatial', image = 'slice6B', image.alpha = 0)
+c<-SpatialFeaturePlot(st, 'nCount_Spatial', image = 'slice2B', image.alpha = 0)
+d<-SpatialFeaturePlot(st, 'nCount_Spatial', image = 'slice4B', image.alpha = 0)
+e<-SpatialFeaturePlot(st, 'nCount_Spatial', image = 'slice7A', image.alpha = 0)
+f<-SpatialFeaturePlot(st, 'nCount_Spatial', image = 'slice3A', image.alpha = 0)
+g<-SpatialFeaturePlot(st, 'nCount_Spatial', image = 'slice8B', image.alpha = 0)
+a+b+c+d+e+f+g & plot_layout(nrow = 1) & scale_fill_gradientn( breaks = seq(0,100000,30000), colours=DefaultSpatialColors(n=100)) & theme(legend.text = element_text(size = 6))
+
+a<-SpatialFeaturePlot(st, 'nFeature_Spatial', image = 'slice5A', image.alpha = 0)
+b<-SpatialFeaturePlot(st, 'nFeature_Spatial', image = 'slice6B', image.alpha = 0)
+c<-SpatialFeaturePlot(st, 'nFeature_Spatial', image = 'slice2B', image.alpha = 0)
+d<-SpatialFeaturePlot(st, 'nFeature_Spatial', image = 'slice4B', image.alpha = 0)
+e<-SpatialFeaturePlot(st, 'nFeature_Spatial', image = 'slice7A', image.alpha = 0)
+f<-SpatialFeaturePlot(st, 'nFeature_Spatial', image = 'slice3A', image.alpha = 0)
+g<-SpatialFeaturePlot(st, 'nFeature_Spatial', image = 'slice8B', image.alpha = 0)
+a+b+c+d+e+f+g & plot_layout(nrow = 1) & scale_fill_gradientn( breaks = seq(0,100000,3000), colours=DefaultSpatialColors(n=100)) & theme(legend.text = element_text(size = 6))
+
+median(st$nCount_Spatial)
+sd(st$nCount_Spatial)
+mean(st$nCount_Spatial)
+sd(st$nCount_Spatial) / sqrt(length(st$nCount_Spatial))
+
+median(st$nFeature_Spatial)
+sd(st$nFeature_Spatial)
+mean(st$nFeature_Spatial)
+sd(st$nFeature_Spatial) / sqrt(length(st$nFeature_Spatial))
+```
+## Fig 3-7 3-8
+```{r, eval = FALSE}
+pdf(file = paste0(results_folder, 'markergenes_st.pdf'), width = 15, height = 4)
+huhy_plots(st, 'SLC17A6', 0.992)
+huhy_plots(st, 'SLC32A1', 0.992)
+huhy_plots(st, 'TBX3', 0.992)
+huhy_plots(st, 'FEZF1', 0.992)
+huhy_plots(st, 'SIM1', 0.992)
+huhy_plots(st, 'MEIS2', 0.992)
+huhy_plots(st, 'LHX6', 0.992)
+huhy_plots(st, 'FOXB1', 0.992)
+huhy_plots(st, 'LMX1A', 0.999)
+huhy_plots(st, 'PITX2', 0.992)
+dev.off()
+```
+## Fig 3-9
+```{r, eval = FALSE}
+SpatialFeaturePlot(st, image = 'slice2B', features = c('POMC', 'AGRP', 'CARTPT', 'NPY', 'AVP', 'OXT', 'GHRH', 'ADCYAP1'), image.alpha = 0, ncol = 4, pt.size.factor = 1.2)
+```
+## Fig 3-10
+```{r, eval = FALSE}
+SpatialFeaturePlot(st, image = 'slice2B', features = c('TAC3'), image.alpha = 0, pt.size.factor = 1.2)
+```
+## Fig 3-15
+```{r, eval = FALSE}
+DefaultAssay(st)<-'C2'
+cell2loc_plots(st, 'C2.26')
+cell2loc_plots(st, 'C2.27')
+cell2loc_plots(st, 'C2.26')
+cell2loc_plots(st, 'C2.26')
+```
+## Fig 3-19 3-20
+```{r, eval = FALSE}
+DefaultAssay(st)<-'C3'
+cell2loc_plots(st, 'C3.47')
+cell2loc_plots(st, 'C3.48')
+cell2loc_plots(st, 'C3.49')
+cell2loc_plots(st, 'C3.50')
+cell2loc_plots(st, 'C3.51')
+cell2loc_plots(st, 'C3.52')
+cell2loc_plots(st, 'C3.53')
+
+astro_qc<-read.delim('../Reference-tables/astrocyte_nonneuron_markers_noLinc.txt')
+#QC
+DefaultAssay(st)<-'Spatial'
+huhy_plots(st, gene = 'ITPRID1', percentile = 1)
+huhy_plots(st, gene = 'LGR6', percentile = 1)
+huhy_plots(st, gene = 'COL5A3', percentile = 1)
+huhy_plots(st, gene = 'KCNJ16', percentile = 1)
+huhy_plots(st, gene = 'NWD1', percentile = 1)
+DefaultAssay(st)<-'C3'
+cell2loc_plots(st, 'C3.48')
+DefaultAssay(st)<-'Spatial'
+huhy_plots(st, gene = 'ECM2', percentile = 1)
+huhy_plots(st, gene = 'CPAMD8', percentile = NA)
+huhy_plots(st, gene = 'MYOF', percentile = 1)
+huhy_plots(st, gene = 'CD44', percentile = 1)
+huhy_plots(st, gene = 'MYLK', percentile = 1)
+huhy_plots(st, gene = 'F5', percentile = 1)
+huhy_plots(st, gene = 'SLC47A2', percentile = 1)
+DefaultAssay(st)<-'C3'
+cell2loc_plots(st, 'C3.53')
+```
+## Fig 3-22
+```{r, eval = FALSE}
+DefaultAssay(st)<-'Spatial'
+huhy_plots(st, 'POMC')
+huhy_plots(st, 'AGRP')
+```
+## Fig 3-23 3-24
+```{r, eval = FALSE}
+huhy_plots(st, gene = 'MC3R', percentile = 1)
+DefaultAssay(st)<-'C6'
+cell2loc_plots(st, 'C6.289')
+cell2loc_plots(st, 'C6.288')
+cell2loc_plots(st, 'C6.196')
+cell2loc_plots(st, 'C6.291')
+cell2loc_plots(st, 'C6.212')
+cell2loc_plots(st, 'C6.283')
+cell2loc_plots(st, 'C6.243')
+cell2loc_plots(st, 'C6.280')
+cell2loc_plots(st, 'C6.279')
+cell2loc_plots(st, 'C6.125')
+```
+## Fig 3-25
+```{r, eval = FALSE}
+DefaultAssay(st)<-'C6'
+cell2loc_plots(st, 'C6.43')
+cell2loc_plots(st, 'C6.253')
+cell2loc_plots(st, 'C6.224')
+cell2loc_plots(st, 'C6.112')
+cell2loc_plots(st, 'C6.407')
+cell2loc_plots(st, 'C6.181')
+cell2loc_plots(st, 'C6.295')
+cell2loc_plots(st, 'C6.276')
+cell2loc_plots(st, 'C6.88')
+cell2loc_plots(st, 'C6.402')
+```
+## Fig 3-27
+```{r, eval = FALSE}
+DefaultAssay(st)<-'Spatial'
+huhy_plots(st, 'GIPR')
+DefaultAssay(st)<-'C6'
+cell2loc_plots(st, 'C6.319')
+cell2loc_plots(st, 'C6.330')
+cell2loc_plots(st, 'C6.311')
+DefaultAssay(st)<-'C4'
+SpatialFeaturePlot(st, 'C4.94', images = 'slice2B', crop = TRUE, pt.size.factor = 1.6, image.alpha = 0)
+```
+

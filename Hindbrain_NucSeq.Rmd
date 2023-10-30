@@ -1,0 +1,803 @@
+---
+title: "Hindbrain_NucSeq"
+author: "Georgina Dowsett"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, root.dir = '~/Dropbox/Thesis/Chapter2/')
+```
+
+# Analysis and Plotting of snRNA-seq of the mouse hindbrain in the fed and fasted state
+
+This R Markdown document provides the code required for further analysis and plotting of the snRNAseq datset of mouse hindbrain in the fed and fasted state. 
+```{r message = FALSE}
+library(Seurat)
+library(dplyr)
+library(cowplot)
+library(ggplot2)
+library(hdf5r)
+library(tidyr)
+library(patchwork)
+library(viridis)
+library(viridisLite)
+library(stringr)
+library(tidyverse)
+library(scCustomize)
+library(RColorBrewer)
+source('~/Dropbox/Data/ST_forhumanhypomap/Scripts/RNAseqSTUtils.R')
+```
+
+```{r echo = FALSE}
+sessionInfo()
+```
+
+## Loading of the dataset
+
+Here, we load the RDS file and marker genes files created for the publication of PMID: 33962048. 
+For the analysis pipeline used to create this dataset see 'Hindbrain_analysis_pipeline.R
+
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+ntsmerged<-readRDS('Chapter2/Hindbrain/Data/nts_merged.master.201023.RDS')
+markers<-read.delim('Chapter2/Hindbrain/Data/all_wilcox_markers.txt', header = T, row.names = 1)
+markers_neu<-read.delim('Chapter2/Hindbrain/Data/all_neu_wilcox_markers.txt', header = T, row.names = 1)
+oligos<-readRDS('Chapter2/Hindbrain/Data/oligodendrocyte-subset.RDS')
+oligo_dge<-read.delim('Chapter2/Hindbrain/Data/oligo-subset-dge-fedvfast-seurat.txt', header = T, row.names = 1)
+fedfast_dge<-readRDS('Chapter2/Hindbrain/Data/fastvsfed.RDS')
+#Check the data 
+DimPlot(ntsmerged)
+
+#Load in genes_to_ens function
+gene_names<-read.delim("Chapter2/Hindbrain/Reference_tables/mouse_genes_names_Ens100_rmdup.txt",row.names=3)
+genes_to_ens<-function(gene_symbol){
+  return(as.character(gene_names[gene_symbol,1]))
+}
+
+ntsmerged$cluster_numbers<-ntsmerged$seurat_clusters
+
+
+```
+
+## Adding cell types as metadata 
+Based on the expression of canonical marker genes, we can identify the cell type of each cluster. 
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+VlnPlot(ntsmerged, genes_to_ens(c('Syt1', 'Mog', 'Pdgfra', 'Tmem119', 'Lum', 'Slc1a2')), pt.size = 0)
+clusters <- c(
+  "0" = "OLs",
+  "1" = "OLs",
+  "3" = "OLs",
+  "4" = "OLs",
+  "9" = "OLs",
+  "24" = "OLs",
+  "8" = "Astrocytes",
+  "10" = "OPCs",
+  "32" = "NFOs",
+  "37" = "Endothelial",
+  "15" = "Microglia",
+  "2" = "Neurons",
+  "5" = "Neurons",
+  "6" = "Neurons",
+  "7" = "Neurons",
+  "11" = "Neurons",
+  "12" = "Neurons",
+  "13" = "Neurons",
+  "14" = "Neurons",
+  "16" = "Neurons",
+  "17" = "Neurons",
+  "18" = "Neurons",
+  "19" = "Neurons",
+  "20" = "Neurons",
+  "21" = "Neurons",
+  "22" = "Neurons",
+  "23" = "Neurons",
+  "25" = "Neurons",
+  "26" = "Neurons",
+  "27" = "Neurons",
+  "28" = "Neurons",
+  "29" = "Neurons",
+  "30" = "Neurons",
+  "31" = "Neurons",
+  "33" = "Neurons",
+  "34" = "Neurons",
+  "35" = "Neurons",
+  "36" = "Neurons",
+  "38" = "Neurons",
+  "39" = "Neurons",
+  "40" = "Neurons")
+
+ntsmerged$cell_type <- clusters[as.character(ntsmerged$seurat_clusters)]
+DimPlot(ntsmerged, group.by = 'cell_type', label = T)
+```
+
+## Creating a subset of the neuronal population
+```{r}
+Idents(ntsmerged)<-'cell_type'
+neurons<-subset(ntsmerged, idents = 'Neurons')
+Idents(ntsmerged)<-'seurat_clusters'
+Idents(neurons)<-'seurat_clusters'
+```
+
+## Finding the marker genes for each cluster. 
+Originally, in the paper we found marker genes using Wilcoxon rank sum test and roc analysis and looked at both outputs to identify marker genes for each cluster. 
+Here, we will use output from the Wilcox rank sum test and calculate a specificity score for each gene in each cluster, which combines information from avg_LogFC, pct.1 and pct.2 values.
+We will then identify cluster markers by taking the two genes with the highest specificity score. 
+
+```{r}
+markers$specificity_score <- ((markers$pct.1 + 0.01) / (markers$pct.2 + 0.01)) * markers$avg_logFC
+markers_neu$specificity_score <- ((markers_neu$pct.1 + 0.01) / (markers_neu$pct.2 + 0.01)) * markers_neu$avg_logFC
+```
+
+## Naming Clusters
+Here we will use the marker genes and the calculated Specificity score to name each cluster by their top two marker genes. 
+For the neuronal population we will use markers found using the neuronal subset only, to make this more specific.
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+ntsmerged$cluster_numbers<-ntsmerged$seurat_clusters
+
+#we remove any Riken or Gm genes, and keep only positive marker genes 
+markers_clean <- markers[!grepl("Rik$", markers$genesymbol) &
+                         !grepl("^Gm[0-9]", markers$genesymbol) &
+                         markers$avg_logFC >= 0, ]
+
+markers_neu_clean <- markers_neu[!grepl("Rik$", markers_neu$genesymbol) &
+                         !grepl("^Gm[0-9]", markers_neu$genesymbol) &
+                         markers_neu$avg_logFC >= 0, ]
+
+#Non-neurons 
+nn_clusters<-data.frame(ntsmerged$seurat_clusters, ntsmerged$cell_type)
+nn_clusters <- nn_clusters %>%
+  group_by(ntsmerged.seurat_clusters, ntsmerged.cell_type) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+nn_clusters <- nn_clusters %>%
+  filter(ntsmerged.cell_type != "Neurons")
+
+top_genes <- markers_clean %>%
+  group_by(cluster) %>%
+  arrange(desc(specificity_score)) %>%
+  slice_head(n = 2) %>%
+  mutate(cluster_name = paste(genesymbol, collapse = "/")) %>%
+  select(cluster, cluster_name) %>%
+  distinct()
+
+nn_clusters$ntsmerged.seurat_clusters<-as.integer(as.character(nn_clusters$ntsmerged.seurat_clusters))
+
+nn_clusters <- nn_clusters %>%
+  left_join(top_genes, by = c("ntsmerged.seurat_clusters" = "cluster"))
+
+nn_clusters <- nn_clusters %>%
+  mutate(cluster_name = case_when(
+    ntsmerged.cell_type == "OLs" ~ paste0("OL_", cluster_name),
+    ntsmerged.cell_type == "OPCs" ~ paste0("OPC_", cluster_name),
+    ntsmerged.cell_type == "NFOs" ~ paste0("NFO_", cluster_name),
+    ntsmerged.cell_type == "Endothelial" ~ paste0("Endo_", cluster_name),
+    ntsmerged.cell_type == "Astrocytes" ~ paste0("Astro_", cluster_name),
+    ntsmerged.cell_type == "Microglia" ~ paste0("Microglia_", cluster_name),
+    TRUE ~ cluster_name  # Keep the original cluster_name if not matched
+  ))
+
+
+#Neuronal clusters
+neu_clusters<-data.frame(neurons$seurat_clusters, neurons$cell_type)
+neu_clusters <- neu_clusters %>%
+  group_by(neurons.seurat_clusters, neurons.cell_type) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+top_genes <- markers_neu_clean %>%
+  group_by(cluster) %>%
+  arrange(desc(specificity_score)) %>%
+  slice_head(n = 2) %>%
+  mutate(cluster_name = paste(genesymbol, collapse = "/")) %>%
+  select(cluster, cluster_name) %>%
+  distinct()
+
+neu_clusters$neurons.seurat_clusters<-as.integer(as.character(neu_clusters$neurons.seurat_clusters))
+
+neu_clusters <- neu_clusters %>%
+  left_join(top_genes, by = c("neurons.seurat_clusters" = "cluster"))
+
+# Create the 'cluster_name' column
+neu_clusters$cluster_name <- paste0(
+  toupper(substr(neu_clusters$neurons.cell_type, 1, 2)),
+  "_",
+  neu_clusters$cluster_name
+)
+
+nn_clusters <- nn_clusters %>%
+  rename(clusters = ntsmerged.seurat_clusters) %>%
+  select(clusters, cluster_name)
+
+neu_clusters <- neu_clusters %>%
+  rename(clusters = neurons.seurat_clusters) %>%
+  select(clusters, cluster_name)
+
+# Select desired columns and concatenate the renamed tables
+combined_clusters <- bind_rows(nn_clusters, neu_clusters)
+
+combined_clusters <- combined_clusters %>%
+  arrange(clusters)
+#rename idents 
+new.cluster.ids <- combined_clusters$cluster_name
+names(new.cluster.ids)<-levels(ntsmerged)
+ntsmerged<-RenameIdents(ntsmerged, new.cluster.ids)
+DimPlot(ntsmerged, label = T) + NoLegend()
+
+ntsmerged$cluster_names<-ntsmerged@active.ident
+
+#Add to neuronal subset as well 
+neurons<-AddMetaData(neurons, metadata = ntsmerged$cluster_names, col.name = 'cluster_names')
+
+#clean up environment
+rm(neu_clusters)
+rm(nn_clusters)
+rm(clusters)
+rm(new.cluster.ids)
+```
+## Adding cluster names to marker genes lists & save for supplementary tables
+```{r}
+markers<-merge(markers, combined_clusters, by.x = 'cluster', by.y = 'clusters')
+markers_neu<-merge(markers_neu, combined_clusters, by.x = 'cluster', by.y = 'clusters', all.x = TRUE)
+write.table(markers, 'Chapter2/Hindbrain/Figures_Tables/1_Hindbrain_snRNAseq_markers_allcells.txt', sep = '\t', row.names = F)
+write.table(markers_neu, 'Chapter2/Hindbrain/Figures_Tables/1_Hindbrain_snRNAseq_markers_neurons.txt', sep = '\t', row.names = F)
+```
+
+## Determine the Neurotransmitter properties of each neuronal cluster. 
+Here we will look at the percentage expression and average expression of a number of NT marker genes and label each neuronal cluster based on the expression levels of these genes. 
+```{r fig.show = 'hide'}
+gene_names1<-read.delim("Chapter2/Hindbrain/Reference_tables/mouse_genes_names_Ens100_rmdup.txt",row.names=2)
+
+#NB can potentially remove functions here as I have added to my RNAseqSTUtils.R script
+convert_colnames <- function(df) {
+  new_colnames <- sapply(colnames(df), function(ensid) {
+    gene_symbol <- gene_names1[gene_names1$Gene.stable.ID == ensid, 'Gene.name']
+    if (length(gene_symbol) == 0) {
+      return(ensid)  # Return original ENSID if no matching gene symbol
+      } else {
+        return(as.character(gene_symbol))
+        }
+    })
+  colnames(df) <- new_colnames
+  return(df)
+}
+
+calc_percent_cluster = function(seurat_object, genes, metadata_name) {
+  gene_expr <- FetchData(seurat_object, vars = genes)
+  clusters <- seurat_object@meta.data[,metadata_name]
+  avex_percluster <- AverageExpression(seurat_object, features = genes, group.by = metadata_name)
+  avex_percluster<- data.frame(t(avex_percluster$RNA))
+  if (any(grepl("^ENSMUSG", colnames(avex_percluster)))) {
+    avex_percluster <- convert_colnames(avex_percluster)
+  }
+  colnames(avex_percluster) <- paste0("AvEx_", colnames(avex_percluster))
+  avex_percluster <- round(avex_percluster, 2)
+  gene_expr[gene_expr > 0] <- 1
+  gene_expr[gene_expr < 1] <- 0
+  total_cells_per_cluster <- table(clusters)
+  total_cells_per_cluster <- subset(total_cells_per_cluster, total_cells_per_cluster > 0)
+  cells_expressing_gene_per_cluster <- rowsum(gene_expr, clusters)
+  percent_expressing_gene_per_cluster <- cells_expressing_gene_per_cluster / total_cells_per_cluster * 100
+  percent_expressing_gene_per_cluster <- round(percent_expressing_gene_per_cluster, 2)
+  if (any(grepl("^ENSMUSG", colnames(percent_expressing_gene_per_cluster)))) {
+    percent_expressing_gene_per_cluster <- convert_colnames(percent_expressing_gene_per_cluster)
+  }
+  result<-cbind(percent_expressing_gene_per_cluster, avex_percluster)
+  return(as.data.frame(result))
+}
+
+NT_genes<-c('Slc17a6', 'Slc17a7', 'Slc17a8', 'Slc32a1', 'Gad1', 'Gad2', 'Slc6a5', 'Slc6a9', 'Slc18a3', 'Chat', 'Slc5a7', 'Slc6a3', 'Ddc', 'Th', 'Pnmt', 'Dbh', 'Tph2', 'Slc6a4', 'Hdc')
+
+neurons_NT<-calc_percent_cluster(neurons, genes = genes_to_ens(NT_genes), metadata_name = 'seurat_clusters')
+
+#Here, we use a cut off of 35% to determine whether a cluster is expressing a NT marker gene
+nt_model<-neurons_NT
+nt_model[nt_model<30] <- 0
+nt_model[nt_model>=30]<-1
+nt_model<-nt_model[,1:19]
+
+#can potentially remove this function as i have added to RNAseqSTUtils.R
+calc_NTs <- function(data, mouse = TRUE) {
+  labeled_data <- data
+  
+  if (!'NTs' %in% colnames(labeled_data)) {
+    labeled_data$NTs <- character(nrow(labeled_data))
+  }
+  
+  for (i in 1:nrow(labeled_data)) {
+    row <- labeled_data[i, ]
+    labels <- c()
+    
+    if (mouse) {
+      if (row['Slc17a6'] == 1) labels <- c(labels, 'GLUT2')
+      if (row['Slc17a7'] == 1) labels <- c(labels, 'GLUT1')
+      if (row['Slc17a8'] == 1) labels <- c(labels, 'GLUT3')
+      if ((row['Gad1'] == 1 || row['Gad2'] == 1) && row['Slc32a1'] == 1) labels <- c(labels, 'GABA')
+      if ((row['Gad1'] == 1 || row['Gad2'] == 1) && (row['Slc6a5'] == 1 || row['Slc6a9'] == 1)) labels <- c(labels, 'GLY')
+      if (row['Chat'] == 1 && row['Slc5a7'] == 1) labels <- c(labels, 'Chol')
+      if ((row['Slc6a3'] == 1 || row['Ddc'] == 1 || row['Th'] == 1) && row['Dbh'] == 0 && row['Pnmt'] == 0 && row['Tph2'] == 0 && row['Slc6a4'] == 0) labels <- c(labels, 'Dopa')
+      if (row['Pnmt'] == 1 || row['Dbh'] == 1) labels <- c(labels, 'Noradr')
+      if (row['Tph2'] == 1 && row['Slc6a4'] == 1) labels <- c(labels, '5-HT')
+      if (row['Hdc'] == 1) labels <- c(labels, 'His');
+    } else {
+      if (row['SLC17A6'] == 1) labels <- c(labels, 'GLUT2')
+      if (row['SLC17A7'] == 1) labels <- c(labels, 'GLUT1')
+      if (row['SLC17A8'] == 1) labels <- c(labels, 'GLUT3')
+      if ((row['GAD1'] == 1 || row['GAD2'] == 1) && row['SLC32A1'] == 1) labels <- c(labels, 'GABA')
+      if ((row['GAD1'] == 1 || row['GAD2'] == 1) && (row['SLC6A5'] == 1 || row['SLC6A9'] == 1)) labels <- c(labels, 'GLY')
+      if (row['CHAT'] == 1 && row['SLC5A7'] == 1) labels <- c(labels, 'Chol')
+      if ((row['SLC6A3'] == 1 || row['DDC'] == 1 || row['TH'] == 1) && row['DBH'] == 0 && row['PNMT'] == 0 && row['TPH2'] == 0 && row['SLC6A4'] == 0) labels <- c(labels, 'Dopa')
+      if (row['PNMT'] == 1 || row['DBH'] == 1) labels <- c(labels, 'Noradr')
+      if (row['TPH2'] == 1 && row['SLC6A4'] == 1) labels <- c(labels, '5-HT')
+      if (row['HDC'] == 1) labels <- c(labels, 'His');
+    }
+    
+    if (length(labels) > 0) {
+      if (!is.na(row['NTs']) && row['NTs'] != '') {
+        existing_labels <- unlist(strsplit(row['NTs'], '_'))
+        labels <- c(existing_labels, labels)
+      }
+      labeled_data[i, 'NTs'] <- paste(labels, collapse = '_')
+    } else {
+      labeled_data[i, 'NTs'] <- NA
+    }
+  }
+  
+  return(labeled_data)
+}
+
+nt_model<-calc_NTs(nt_model)
+#Only 1 row had 'NA' value - has low levels expression of Glut2 and GABA/Glycine markers. Gad2 reached threshold so labelling as 'GABA'
+nt_model$NTs[is.na(nt_model$NTs)] <- 'GABA'
+
+#add this information as a metadata
+new.cluster.ids <- nt_model$NTs
+names(new.cluster.ids)<-levels(neurons)
+neurons<-RenameIdents(neurons, new.cluster.ids)
+neurons$NTs<-neurons@active.ident
+
+#Add to wholedata
+ntsmerged<-AddMetaData(ntsmerged, metadata = neurons$NTs, col.name = 'NTs')
+
+#Clean up environment
+rm(nt_model)
+rm(markers_neu_clean)
+rm(markers_clean)
+```
+
+## Characterising neuronal properties by expression of Neuropeptides. 
+Here we will follow a similar procedure to above, but looking at neuropeptide expression. 
+List of neuropeptides was extracted from the Langlieb paper and we looked at the expression patterns throughout the neuronal clusters
+```{r, results = 'hide', message = FALSE, fig.show = 'hide'}
+#read in table
+NPs<-read.delim('Chapter2/Hindbrain/Reference_tables/Neuropeptides-list_Langlieb-paper.csv', sep = ',')
+mouse_anno<-read.delim('Chapter2/Hindbrain/Reference_tables/mouse_full_annotations.txt')
+NPs <- NPs %>%
+    mutate(Gene = str_to_title(Neuropeptide))
+#we checked to see if all the names are synonymous with the gene names. 
+genes_to_ens(NPs$Gene)
+#all fine apart from Ins which in mouse is Ins2 and Ins1, and Rln2 which i think does not exist in mice??? 
+#adding Gcg and insl genes
+np_genes<-NPs$Gene
+np_genes[26]<-'Ins1'
+np_genes[53]<-'Ins2'
+np_genes<-append(np_genes, c('Gcg', 'Insl3', 'Insl5'))
+
+Idents(neurons)<-'cluster_numbers'
+neurons_NPs<-calc_percent_cluster(seurat_object = neurons, genes = genes_to_ens(np_genes), metadata_name = 'seurat_clusters')
+neurons_NPs_pct<-neurons_NPs[,1:68]
+neurons_NPs_avex<-neurons_NPs[,69:136]
+
+#trying cut off of 20%
+neurons_NPs_pct$NPs <- apply(neurons_NPs_pct, 1, function(row) {
+  np_genes <- colnames(neurons_NPs_pct)[row > 20 & !colnames(neurons_NPs_pct) %in% c("Agrp", "Penk")]
+  
+  if (row['Agrp'] > 50) {
+    np_genes <- c(np_genes, 'Agrp')
+  }
+  if (row['Penk'] > 30) {
+    np_genes <- c(np_genes, 'Penk')
+  }
+  
+  if (length(np_genes) > 0) {
+    if (!is.na(row['NPs']) && row['NPs'] != '') {
+      return(paste(row['NPs'], paste(np_genes, collapse = '|'), sep = '|'))
+    } else {
+      return(paste(np_genes, collapse = '|'))
+    }
+  } else {
+    return(row['NPs'])
+  }
+})
+
+
+Idents(neurons)<-'cluster_numbers'
+Idents(ntsmerged)<-'cluster_numbers'
+
+
+new.cluster.ids <- neurons_NPs_pct$NPs
+names(new.cluster.ids)<-levels(neurons)
+neurons<-RenameIdents(neurons, new.cluster.ids)
+neurons$NPs<-neurons@active.ident
+Idents(neurons)<-'cluster_numbers'
+
+ntsmerged<-AddMetaData(ntsmerged, metadata = neurons$NPs, col.name = 'NPs')
+Idents(neurons)<-'cluster_numbers'
+Idents(ntsmerged)<-'cluster_numbers'
+```
+
+## Collating NT and NP information
+Next we create a table which has the Cluster name, and the NT and NP properties of each cluster. We will save this table for use in the thesis. 
+```{r}
+table<-data.frame(neurons$cluster_names, neurons$NTs, neurons$NPs)
+table<- table %>%
+  group_by(neurons.cluster_names) %>%
+  slice(1) %>%
+  ungroup()
+```
+
+## IEG analysis
+Here we look at expression of immediate early genes (list from Kim paper) and see if any are differentially expressed in the fasted state.
+To do this, we extract the list of IEGs, and subset the DGE lists to include only IEGs, with a pval<0.05. 
+We then display this data as a violin plot, only including clusters that show significant differential expression of at least one of the IEGs. 
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+iegs<-read.csv('Chapter2/Hindbrain/Reference_tables/IEGs_Kim_Hypothalamus_NucSeq.csv', header = T)
+iegs<-as.character(iegs$IEGs)[1:139]
+#renaming 2 genes as they have synonymous gene names 
+iegs[31]<-'Ccn1'
+iegs[53]<-'Ccn2'
+
+subsetted_fedfast_dge <- list()
+for (i in 1:length(fedfast_dge)) {
+subsetted_fedfast_dge[[i]] <- fedfast_dge[[i]][fedfast_dge[[i]]$genesymbol %in% iegs, ]
+}
+
+list_with_numbers <- lapply(seq_along(subsetted_fedfast_dge), function(i) {
+  if (nrow(subsetted_fedfast_dge[[i]]) > 0) {
+    subsetted_fedfast_dge[[i]]$original_cluster_number <- i - 1
+  }
+  subsetted_fedfast_dge[[i]]
+})
+
+list_with_numbers <- list_with_numbers[sapply(list_with_numbers, nrow) > 0]
+
+combined_fedfast_dge <- bind_rows(list_with_numbers)
+
+combined_fedfast_dge<-combined_fedfast_dge[combined_fedfast_dge$p_val<0.05,]
+
+#Create a stacked violin plot showing the IEGs that are differentially expressed in the dataset 
+iegs<-unique(as.character(combined_fedfast_dge$genesymbol))
+
+Stacked_VlnPlot(ntsmerged, group.by = 'cluster_numbers', split.by = 'nutr.cond', features = genes_to_ens(iegs), idents = c(unique(as.numeric(combined_fedfast_dge$original_cluster_number))))
+
+num_to_name <- function(numbers) {
+  return(sapply(numbers, function(number) {
+    as.character(combined_clusters[combined_clusters$clusters == number, 2])
+  }))
+}
+
+
+
+```
+
+## Downstream analysis of druggable targets. 
+We look at expression of Glp1r, Gipr, Calcr and Gfral, and characterise them based on their expression profiles. 
+```{r}
+
+#next, for each gene look at the percentage expression in each cluster
+genes_of_interest<-calc_percent_cluster(ntsmerged, genes = genes_to_ens(c('Glp1r', 'Gipr', 'Calcr', 'Gfral', 'Pomc', 'Gcg', 'Mc4r', 'Mc3r', 'Prlh', 'Ramp1', 'Ramp2', 'Ramp3')), metadata_name = 'cluster_names')
+
+#Highlighting cells coexpressing glp1r and other receptors 
+test<-FetchData(ntsmerged, vars = c("ENSMUSG00000024027", "ENSMUSG00000030406"), slot = 'counts')
+cells_with_both_genes <- row.names(test)[test[, 'ENSMUSG00000024027'] > 0 & test[, 'ENSMUSG00000030406'] > 0]
+ntsmerged$glp1rgipr <- ifelse(colnames(ntsmerged) %in% cells_with_both_genes, 'GLP1R+GIPR+', 'Negative')
+
+test<-FetchData(ntsmerged, vars = c("ENSMUSG00000024027", "ENSMUSG00000059383"), slot = 'counts')
+cells_with_both_genes <- row.names(test)[test[, 'ENSMUSG00000024027'] > 0 & test[, 'ENSMUSG00000059383'] > 0]
+ntsmerged$glp1rgfral <- ifelse(colnames(ntsmerged) %in% cells_with_both_genes, 'GLP1R+GFRAL+', 'Negative')
+
+test<-FetchData(ntsmerged, vars = c("ENSMUSG00000024027", "ENSMUSG00000023964"), slot = 'counts')
+cells_with_both_genes <- row.names(test)[test[, 'ENSMUSG00000024027'] > 0 & test[, 'ENSMUSG00000023964'] > 0]
+ntsmerged$glp1rcalcr <- ifelse(colnames(ntsmerged) %in% cells_with_both_genes, 'GLP1R+CALCR+', 'Negative')
+
+# Creating a subset of the cluster which contains Gfral and Glp1r neurons 
+ddc_sctr<-subset(ntsmerged, idents = 31)
+
+# subset of gcg cluster 
+gcg<-subset(ntsmerged, idents = 38)
+
+```
+
+
+# Plots 
+## Here we will provide the code to draw the plots for each figure 
+
+### Fig 2-1
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+DimPlot(ntsmerged, group.by = 'cell_type', label = T, label.size = 6) + 
+  NoLegend() + 
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) +
+  ggtitle(element_blank())
+FeaturePlot(ntsmerged,genes_to_ens(c('Syt1', 'Snap25', 'Rbfox3')),order=T, col = c("lightgrey", "darkgreen"), ncol = 3) &
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) &
+  ggtitle(element_blank())
+FeaturePlot(ntsmerged,genes_to_ens(c('Mog', 'Olig2', 'Pdgfra')),order=T, col = c("lightgrey", "darkblue"), ncol = 3) &
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) &
+  ggtitle(element_blank())
+FeaturePlot(ntsmerged,genes_to_ens(c('Slc1a2', 'Slc1a3', 'Aldh1l1')),order=T, col = c("lightgrey", "darkred"), ncol = 3) &
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) &
+  ggtitle(element_blank())
+FeaturePlot(ntsmerged,genes_to_ens(c('Lum', 'Lum' , 'Lum')),order=T, col = c("lightgrey", "purple"), ncol = 3) &
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) &
+  ggtitle(element_blank())
+FeaturePlot(ntsmerged,genes_to_ens(c('Tmem119', 'Tmem119', 'Tmem119')),order=T, col = c("lightgrey", "darkorange"), ncol = 3) &
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) &
+  ggtitle(element_blank())
+FeaturePlot(ntsmerged,genes_to_ens(c('Lum')),order=T, col = c("lightgrey", "purple"), pt.size = 3) &
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) &
+  ggtitle(element_blank()) &
+  xlim(4,12) &
+  ylim(-52,-46)
+  
+```
+
+### Fig2-2, 2-3
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+DimPlot(ntsmerged, label = T, label.size = 5, repel = T, group.by = 'cluster_names') + 
+  NoLegend() +
+  theme(axis.line = element_blank(), 
+        axis.title = element_blank(), 
+        axis.text = element_blank(), 
+        axis.ticks = element_blank()) +
+  ggtitle(element_blank())
+
+dotplot_genes<-c('Il33', 'D7Ertd443e', 'Prr5l', 'Aspa', 'Prdm16', 'Mecom', 'Opalin', 'Enpp6', 'Anln', 'Slc6a5', 'Syt2', 'Sox2ot', 'Cdh8', 'Mecom', 'Zfhx3', 'Slc39a12', 'Atp13a4', 'Art3', 'Mob3b', 'Pdgfra', 'Cspg4', 'Prkd1', 'Bcl11a', 'Ebf2', 'Fbxl7', 'Tac1', 'Dlk1', 'Lhx2', 'Lhx9', 'Arhgap45', 'Ly86', 'Sall3', 'Cdh3', 'Pde1a', 'Zeb2', 'Dach1', 'Grin2c', 'Arhgap6', 'Ebf3', 'Tfap2b', 'Olfr78', 'Ccbe1', 'Pou6f2', 'Gal', 'Dkk2', 'Col23a1', 'Kcnmb2', 'Prom1', 'Kit', 'Bnc2', 'Lama1', 'Rab38', 'Sall3', 'Slc17a7', 'Col27a1', 'Ebf2', 'Atp10a', 'Grin2c', 'Osbpl3', 'Mylk', 'Lpar1', 'Ddc', 'Sctr', 'Bmp4', 'Gpr17', 'Nfib', 'Zic2', 'Ddc', 'Dbh', 'Maf', 'Rorb','Tbx20', 'Prph', 'Slc6a13', 'Slc6a20a', 'Gcg', 'Prlr', 'Hmcn2', 'Mybpc1', 'Slc6a4', 'Tph2')
+dotplot_genes<-unique(dotplot_genes)
+
+DotPlot(ntsmerged, features = genes_to_ens(dotplot_genes), group.by = 'cluster_names', scale = F, cols = c('lightgrey', 'purple')) + 
+  scale_x_discrete(labels = dotplot_genes) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+### Fig2-4
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+FeaturePlot(neurons,genes_to_ens(c('Slc17a6','Slc32a1')),order=T,blend = F, pt.size = 1)
+NT_genes<-c('Slc17a6', 'Slc17a7', 'Slc17a8', 'Slc32a1', 'Gad1', 'Gad2', 'Slc6a5', 'Slc6a9', 'Chat', 'Slc5a7', 'Slc6a3', 'Ddc', 'Th', 'Pnmt', 'Dbh', 'Tph2', 'Slc6a4', 'Hdc')
+VlnPlot(neurons, genes_to_ens(NT_genes), group.by = 'cluster_names', stack = T, combine = T) & scale_x_discrete(labels = NT_genes) & NoLegend()
+```
+
+### Table 2-1
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+write.table(table, 'Chapter2/Hindbrain/Figures_Tables/HB_NT_NP.txt', sep = '\t', row.names = F)
+```
+
+### Fig 2-5
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+
+palette(brewer.pal(n=9, "Set1"))
+DimPlot(ntsmerged, group.by = "nutr.cond", pt.size = 1, cols = c(palette()[8], palette()[2])) +
+    theme(legend.text = element_text(size = 20), axis.line = element_blank(), 
+          axis.title = element_blank(), 
+          axis.text = element_blank(), 
+          axis.ticks = element_blank()) +
+    ggtitle(element_blank())
+
+#Stacked bar plot showing % cells in each cluster that are fed/fasted
+metadata <- as.data.frame(ntsmerged@meta.data)
+cluster_feeding_percent <- metadata %>%
+  group_by(cluster_names, nutr.cond) %>%
+  summarise(cell_count = n()) %>%
+  mutate(percentage = (cell_count / sum(cell_count)) * 100)
+
+ggplot(cluster_feeding_percent, aes(x = cluster_names, y = percentage, fill = nutr.cond)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Cluster Names", y = "Percentage (%)", fill = "Feeding Group") +
+  theme_minimal() +
+  coord_flip()+
+  scale_fill_manual(values = c(palette()[8], palette()[2])) +
+  geom_hline(yintercept = 50, color = "black", linetype = "dashed") +
+  theme(axis.text = element_text(size = 12), legend.text = element_text(size =12)) 
+
+#Bar chart displaying the number of sig differentially expressed genes in each cluster
+summary_dge <- data.frame(Cluster = character(0), Upregulated = integer(0), Downregulated = integer(0))
+for (i in 1:41) {
+    cluster_name <- i-1
+    pos <- sum(fedfast_dge[[i]]$avg_logFC > 0 & fedfast_dge[[i]]$p_val < 0.05)
+    neg <- sum(fedfast_dge[[i]]$avg_logFC < 0 & fedfast_dge[[i]]$p_val < 0.05)
+    row_data <- data.frame(Cluster = cluster_name, Upregulated = pos, Downregulated = neg)
+    summary_dge <- rbind(summary_dge, row_data)
+}
+reformatted_summary <- summary_dge %>%
+    mutate(Upregulated = Upregulated, Downregulated = -Downregulated) %>%
+    pivot_longer(cols = c(Upregulated, Downregulated), names_to = "Direction", values_to = "Value")
+
+reformatted_summary <- reformatted_summary %>%
+  left_join(combined_clusters %>% select(clusters, cluster_name), by = c("Cluster" = "clusters")) %>%
+  mutate(Cluster = cluster_name)
+breaks_values <- pretty(reformatted_summary$Value)
+
+
+reformatted_summary %>% ggplot(aes(x= Cluster, y=Value, fill = Direction)) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() + 
+  scale_y_continuous(breaks = breaks_values, labels = abs(breaks_values)) + 
+  theme_minimal() + 
+  theme(legend.title = element_blank(), panel.grid.major=element_blank(), panel.grid.minor = element_blank(), axis.title = element_text(size = 20), axis.text = element_text(size = 12), legend.text = element_text(size = 15)) +
+  geom_hline(yintercept = 0) + 
+  scale_fill_manual(values = c("#377EB8", "#4DAF4A"))  + ylim(-500, 500) +
+  xlab("Cluster") + 
+  ylab("Number of Genes")
+```
+
+### Fig2-6 
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+DimPlot(oligos, group.by = "nutr.cond", pt.size = 1, cols = c(palette()[8], palette()[2])) + 
+  theme(legend.text = element_text(size = 20), axis.line = element_blank(), 
+          axis.title = element_blank(), 
+          axis.text = element_blank(), 
+          axis.ticks = element_blank()) +
+    ggtitle(element_blank())
+
+oligogenes<-c("Sgk1", "Itgad", "Slc6a1",  "Eml1", "Hsp90ab1", "Hsp90b1")
+FeaturePlot(oligos, features = genes_to_ens(oligogenes), order = T, cols = c('lightgrey', 'darkgreen'), pt.size = 0.8, ncol = 3) &
+  theme(axis.text = element_blank(), axis.title = element_blank(), axis.line = element_blank(), axis.ticks = element_blank(), legend.text = element_text(size = 10)) & 
+  ggtitle(element_blank())
+```
+
+### Fig2-7 
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+Stacked_VlnPlot(ntsmerged, group.by = 'cluster_names', split.by = 'nutr.cond', features = genes_to_ens(iegs), idents = c(unique(as.numeric(combined_fedfast_dge$original_cluster_number))), x_lab_rotate = T, colors_use = c(palette()[8], palette()[2]))
+```
+
+### Fig2-8
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+FeaturePlot(ntsmerged, genes_to_ens(c('Glp1r')),order=T, pt.size = 1, cols = c("lightgrey", "darkmagenta")) +
+  labs(title = expression(italic("Glp1r"))) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_text(size = 20))
+DimPlot(ntsmerged, group.by = 'glp1rgipr', cols = c(rgb(0.545,0,0.545,1), rgb(0.8,0.8,0.8,0.2)), order = F, pt.size = 1) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_blank())
+DimPlot(ntsmerged, group.by = 'glp1rgfral', cols = c(rgb(0.545,0,0.545,1), rgb(0.8,0.8,0.8,0.2)), order = F, pt.size = 1) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_blank())
+DimPlot(ntsmerged, group.by = 'glp1rcalcr', cols = c(rgb(0.545,0,0.545,1), rgb(0.8,0.8,0.8,0.2)), order = F, pt.size = 1) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_blank())
+#Vlnplot of the top marker genes for GLP1R clusters 
+VlnPlot(ntsmerged, genes_to_ens(c('Glp1r', 'Slc17a6', 'Slc32a1', 'Slc17a7', 'Col27a1', 'Fam107b', 'Serinc2', 'Lama1', 'Ddc', 'Sctr', 'Etv1', 'Casr', 'Gfral', 'Hmcn2', 'Mecom', 'Sox14', 'Col8a1', 'Lhx4')), stack = T, idents = c(27, 31, 39), flip = T) + NoLegend()
+```
+
+### Fig2-9
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+FeaturePlot(ntsmerged, genes_to_ens(c('Gipr')),order=T, pt.size = 1, cols = c("lightgrey", "darkmagenta")) +
+  labs(title = expression(italic("Gipr"))) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_text(size = 20))
+VlnPlot(ntsmerged, 
+        genes_to_ens(c('Gipr', 'Mog', 'Art3', 'Mob3b', 'Ccbe1', 'Pou6f2', 'Nnat', 'Slc6a5', 'Penk')), 
+        stack = T, 
+        idents = c(21, 9), 
+        flip = T) +
+  NoLegend()
+
+
+```
+
+### Fig2-10
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+FeaturePlot(ntsmerged, genes_to_ens(c('Calcr')),order=T, pt.size = 1, cols = c("lightgrey", "darkmagenta")) +
+  labs(title = expression(italic("Calcr"))) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_text(size = 20))
+VlnPlot(ntsmerged, 
+        genes_to_ens(c('Calcr', 'Ramp1', 'Ramp2', 'Ramp3', 'Slc17a6', 'Slc17a8', 'Ddc', 'Dbh', 'Tph2', 'Slc6a4', 'Gal')), 
+        stack = T, 
+        idents = c(20, 34, 40), flip = T) + 
+  NoLegend()
+```
+
+### Fig2-11
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+FeaturePlot(ntsmerged, genes_to_ens(c('Gfral')),order=T, pt.size = 1, cols = c("lightgrey", "darkmagenta")) +
+  labs(title = expression(italic("Gfral"))) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_text(size = 20))
+FeaturePlot(ddc_sctr, genes_to_ens(c('Glp1r', 'Gfral', 'Ddc', 'Sctr', 'Gck', 'Casr', 'Tshr')), order = T, cols = c('lightgrey', 'darkgreen')) &
+  theme(axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        legend.text = element_text(size = 15),
+        title = element_blank()) &
+  ggtitle(label = element_blank())
+```
+
+### Fig2-12
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+FeaturePlot(ntsmerged, genes_to_ens(c('Pomc')),order=T, pt.size = 1, cols = c("lightgrey", "darkmagenta")) +
+  labs(title = expression(italic("Pomc"))) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_text(size = 20))
+FeaturePlot(ntsmerged, genes_to_ens(c('Mc4r')),order=T, pt.size = 1, cols = c("lightgrey", "darkmagenta")) +
+  labs(title = expression(italic("Mc4r"))) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_text(size = 20))
+```
+
+
+### Fig2-13 
+```{r, message=FALSE, results = 'hide', fig.show='hide'}
+FeaturePlot(ntsmerged, genes_to_ens(c('Gcg')),order=T, pt.size = 1, cols = c("lightgrey", "darkmagenta")) +
+  labs(title = expression(italic("Gcg"))) +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        axis.ticks = element_blank(), 
+        axis.line = element_blank(), 
+        legend.text = element_text(size = 15), 
+        title = element_text(size = 20))
+VlnPlot(gcg, genes_to_ens(c('Gcg', 'Tshr', 'Lepr', 'Esr1', 'Prlr')), ncol = 5)
+```
+
+
+
